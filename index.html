@@ -194,6 +194,7 @@
         </div>
     </div>
 
+    <!-- ヘッダーUI -->
     <div class="fixed top-4 right-4 z-[500] flex gap-2">
         <button id="pause-btn-global" onclick="togglePause()" class="hidden w-10 h-10 pixel-border flex items-center justify-center bg-black text-white hover:bg-gray-800">
             <span id="pause-icon-global">II</span>
@@ -351,6 +352,7 @@
         <!-- ポーズ画面 -->
         <div id="pause-screen" class="hidden absolute inset-0 z-[140] flex flex-col items-center justify-center bg-black/80 p-8 text-center">
             <div class="w-full space-y-4 text-center">
+                <h2 class="text-3xl font-black text-yellow-400 mb-6 uppercase tracking-widest">PAUSED</h2>
                 <button onclick="togglePause()" class="pixel-button w-full py-5 text-2xl font-bold bg-white text-black">再開する</button>
                 <button onclick="location.reload()" class="pixel-button w-full py-3 text-lg font-bold bg-red-900 text-white">タイトル</button>
             </div>
@@ -378,7 +380,7 @@
         </div>
     </div>
 
-    <!-- 即座に実行されるメインスクリプト（非module） -->
+    <!-- メインスクリプト -->
     <script>
         const COIN_TYPES = [
             { val: 10000, label: "10,000", class: "coin-10000" }, { val: 5000, label: "5,000", class: "coin-5000" },
@@ -418,8 +420,9 @@
             isTransitioning: false, vsKeyword: "", vsStartTime: 0, vsPenalty: 0
         };
 
+        // --- Sound Engine ---
         const Sound = {
-            ctx: null, isMuted: false, bgmTimer: null, bgmTempo: 0.18, bgmIndex: 0,
+            ctx: null, isMuted: false, bgmTimer: null, bgmTempo: 0.18, bgmIndex: 0, previewTimer: null,
             init() { 
                 try {
                     if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
@@ -429,26 +432,39 @@
             toggleMute() { 
                 this.isMuted = !this.isMuted; 
                 document.getElementById('mute-icon').innerText = this.isMuted ? '❌' : '🎵'; 
-                if (this.isMuted) this.stopBGM(); else if (state.currentStep > 0) this.startBGM(); 
+                if (this.isMuted) {
+                    this.stopBGM();
+                    this.stopSample();
+                } else if (state.currentStep > 0 && !state.isPaused) {
+                    this.startBGM(); 
+                }
             },
             play(freq, type, duration, vol = 0.1, delay = 0) { 
                 if (!this.ctx || this.isMuted) return; 
                 try {
-                    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain(); const now = this.ctx.currentTime + delay;
-                    osc.type = type; osc.frequency.setValueAtTime(freq, now); gain.gain.setValueAtTime(vol, now); gain.gain.exponentialRampToValueAtTime(0.001, now + duration); 
-                    osc.connect(gain); gain.connect(this.ctx.destination); osc.start(now); osc.stop(now + duration); 
+                    const osc = this.ctx.createOscillator(); 
+                    const gain = this.ctx.createGain(); 
+                    const now = this.ctx.currentTime + delay;
+                    osc.type = type; 
+                    osc.frequency.setValueAtTime(freq, now); 
+                    gain.gain.setValueAtTime(vol, now); 
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration); 
+                    osc.connect(gain); 
+                    gain.connect(this.ctx.destination); 
+                    osc.start(now); 
+                    osc.stop(now + duration); 
                 } catch(e) {}
             },
             getSeq(type, id) {
                 const normals = {
                     v1: [[130.81, 261.63, 329.63, 392.00], [146.83, 293.66, 349.23, 440.00], [164.81, 329.63, 392.00, 493.88], [174.61, 349.23, 440.00, 523.25]],
-                    v2: [[261.63, 329.63, 392.00, 523.25], [329.63, 392.00, 493.88, 659.25]],
-                    v3: [[130.81, 164.81, 196, 261.63], [123.47, 155.56, 185, 246.94]]
+                    v2: [[261.63, 329.63, 392.00, 523.25], [329.63, 392.00, 493.88, 659.25], [293.66, 349.23, 440.00, 587.33], [392.00, 493.88, 587.33, 783.99]],
+                    v3: [[130.81, 164.81, 196, 261.63], [123.47, 155.56, 185, 246.94], [110.00, 138.59, 164.81, 220.00], [116.54, 146.83, 174.61, 233.08]]
                 };
                 const hards = {
                     v1: [[65.41, 130.81, 155.56, 185.00], [61.74, 123.47, 146.83, 174.61]],
                     v2: [[77.78, 155.56, 185, 233.08], [73.42, 146.83, 174.61, 220]],
-                    v3: [[55, 110, 164.81, 196], [48.99, 97.99, 146.83, 185]]
+                    v3: [[55.00, 110.00, 164.81, 196.00], [48.99, 97.99, 146.83, 185.00]]
                 };
                 return (type === 'normal' ? normals[id] : hards[id]) || (type === 'normal' ? normals.v1 : hards.v1);
             },
@@ -459,9 +475,11 @@
                     if (state.isEnding) seq = [[261.63, 329.63, 392.00, 523.25], [329.63, 392.00, 493.88, 659.25], [349.23, 440.00, 523.25, 698.46], [392.00, 493.88, 587.33, 783.99]];
                     else if (state.difficulty === 'nightmare' || state.difficulty === 'hard' || state.difficulty === 'vs') seq = this.getSeq('hard', userData.currentHardBGM);
                     else seq = this.getSeq('normal', userData.currentNormalBGM);
+                    
                     const chord = seq[this.bgmIndex % seq.length];
                     const tempo = state.isEnding ? 0.6 : this.bgmTempo;
                     const panicMultiplier = (!state.isEnding && state.timeLeft < 5) ? 1.2 : 1; 
+                    
                     this.play(chord[0] * panicMultiplier, state.isEnding ? 'sine' : 'sawtooth', tempo * 2.1, 0.05);
                     this.play(chord[1] * panicMultiplier, state.isEnding ? 'sine' : 'square', tempo, 0.03);
                     this.play(chord[2] * panicMultiplier, 'triangle', tempo, 0.02, 0.02);
@@ -469,11 +487,39 @@
                     this.bgmIndex++; 
                 }, (state.isEnding ? 0.6 : (!state.isEnding && state.timeLeft < 5 ? this.bgmTempo * 0.9 : this.bgmTempo)) * 1000); 
             },
-            stopBGM() { if (this.bgmTimer) { clearInterval(this.bgmTimer); this.bgmTimer = null; } },
+            stopBGM() { 
+                if (this.bgmTimer) { 
+                    clearInterval(this.bgmTimer); 
+                    this.bgmTimer = null; 
+                } 
+            },
             playSample(type, id) {
-                this.init(); const seq = this.getSeq(type, id); const chord = seq[0];
-                this.play(chord[0], 'sine', 1.0, 0.1); this.play(chord[1], 'sine', 1.0, 0.05);
-                this.play(chord[2], 'sine', 1.0, 0.05); this.play(chord[3], 'sine', 1.0, 0.05);
+                this.init();
+                this.stopSample();
+                this.stopBGM();
+
+                const seq = this.getSeq(type, id);
+                let previewIdx = 0;
+                const tempo = 0.22;
+                
+                const playStep = () => {
+                    const chord = seq[previewIdx % seq.length];
+                    this.play(chord[0], type === 'normal' ? 'sawtooth' : 'sawtooth', tempo * 1.8, 0.06);
+                    this.play(chord[1], 'square', tempo, 0.03);
+                    this.play(chord[2], 'triangle', tempo, 0.02, 0.02);
+                    this.play(chord[3], 'sine', tempo, 0.02, 0.04);
+                    previewIdx++;
+                };
+
+                playStep();
+                this.previewTimer = setInterval(playStep, tempo * 1000);
+                setTimeout(() => this.stopSample(), 3500); // 3.5秒プレビューして自動停止
+            },
+            stopSample() {
+                if (this.previewTimer) {
+                    clearInterval(this.previewTimer);
+                    this.previewTimer = null;
+                }
             },
             coin() { this.play(880, 'square', 0.1, 0.08); },
             click() { this.play(440, 'sine', 0.05, 0.05); },
@@ -507,9 +553,38 @@
         function hideGachaMenu() { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('gacha-screen').classList.add('hidden'); }
         function showEndlessHome() { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('endless-home-screen').classList.remove('hidden'); }
         function hideEndlessHome() { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('endless-home-screen').classList.add('hidden'); }
-        function toggleCustomize(show) { Sound.click(); document.getElementById('customize-screen').classList.toggle('hidden', !show); if(show) { renderCustomize(); document.getElementById('gacha-screen').classList.add('hidden'); document.getElementById('start-screen').classList.add('hidden'); } else { document.getElementById('start-screen').classList.remove('hidden'); } }
+        
+        function toggleCustomize(show) { 
+            Sound.click(); 
+            Sound.stopSample();
+            document.getElementById('customize-screen').classList.toggle('hidden', !show); 
+            if(show) { 
+                renderCustomize(); 
+                document.getElementById('gacha-screen').classList.add('hidden'); 
+                document.getElementById('start-screen').classList.add('hidden'); 
+            } else { 
+                document.getElementById('start-screen').classList.remove('hidden'); 
+            } 
+        }
+
         function toggleCollection(show) { Sound.click(); document.getElementById('collection-screen').classList.toggle('hidden', !show); if(show) { document.getElementById('start-screen').classList.add('hidden'); renderTitleList(); } else { document.getElementById('start-screen').classList.remove('hidden'); } }
-        function togglePause() { if (state.currentStep === 0) return; state.isPaused = !state.isPaused; const ps = document.getElementById('pause-screen'); const pi = document.getElementById('pause-icon-global'); if(state.isPaused) { ps.classList.remove('hidden'); pi.innerText = "▶"; } else { ps.classList.add('hidden'); pi.innerText = "II"; } }
+
+        function togglePause() { 
+            if (state.currentStep === 0 || state.isEnding) return; 
+            state.isPaused = !state.isPaused; 
+            const ps = document.getElementById('pause-screen'); 
+            const pi = document.getElementById('pause-icon-global'); 
+            if(state.isPaused) { 
+                ps.classList.remove('hidden'); 
+                pi.innerText = "▶"; 
+                Sound.stopBGM();
+            } else { 
+                ps.classList.add('hidden'); 
+                pi.innerText = "II"; 
+                Sound.startBGM();
+            } 
+        }
+
         function undoInput() { if(state.isPaused || state.history.length === 0) return; Sound.click(); const lastVal = state.history.pop(); state.wallet[lastVal]++; state.inputAmount -= lastVal; updateUI(); }
         function resetInput() { if(state.isPaused) return; Sound.click(); state.wallet = {...state.initialWallet}; state.inputAmount = 0; state.history = []; updateUI(); }
 
@@ -519,7 +594,7 @@
             Sound.click();
             document.getElementById('refresh-item-btn').innerText = `REFRESH(${state.itemsRemaining})`;
             if(state.itemsRemaining === 0) document.getElementById('refresh-item-btn').classList.add('opacity-40');
-            state.wallet = generateWallet(state.price, Math.random);
+            state.wallet = generateWallet(state.price, Math.random, state.difficulty);
             state.initialWallet = {...state.wallet};
             state.inputAmount = 0;
             state.history = [];
@@ -546,10 +621,20 @@
         function renderCustomize() {
             const bgC = document.getElementById('bg-selector');
             bgC.innerHTML = userData.unlockedBG.map(id => `<button onclick="changeBG('${id}')" class="w-10 h-10 pixel-border bg-${id} ${userData.currentBG === id ? 'ring-2 ring-yellow-400' : ''}"></button>`).join('');
+            
             const nC = document.getElementById('normal-bgm-selector');
-            nC.innerHTML = userData.unlockedNormalBGM.map(id => `<div class="flex gap-2 mb-1"><button onclick="changeBGM('normal', '${id}')" class="flex-1 pixel-button text-[10px] ${userData.currentNormalBGM === id ? 'bg-yellow-500 text-black' : ''}">${id.toUpperCase()}</button><button onclick="Sound.playSample('normal', '${id}')" class="pixel-button px-2 bg-blue-900 text-[10px]">▶試聴</button></div>`).join('');
+            nC.innerHTML = userData.unlockedNormalBGM.map(id => `
+                <div class="flex gap-2 mb-1">
+                    <button onclick="changeBGM('normal', '${id}')" class="flex-1 pixel-button text-[10px] ${userData.currentNormalBGM === id ? 'bg-yellow-500 text-black font-black' : ''}">${id.toUpperCase()}</button>
+                    <button onclick="Sound.playSample('normal', '${id}')" class="pixel-button px-3 bg-blue-900 text-[10px] font-bold">▶試聴</button>
+                </div>`).join('');
+                
             const hC = document.getElementById('hard-bgm-selector');
-            hC.innerHTML = userData.unlockedHardBGM.map(id => `<div class="flex gap-2 mb-1"><button onclick="changeBGM('hard', '${id}')" class="flex-1 pixel-button text-[10px] ${userData.currentHardBGM === id ? 'bg-yellow-500 text-black' : ''}">${id.toUpperCase()}</button><button onclick="Sound.playSample('hard', '${id}')" class="pixel-button px-2 bg-blue-900 text-[10px]">▶試聴</button></div>`).join('');
+            hC.innerHTML = userData.unlockedHardBGM.map(id => `
+                <div class="flex gap-2 mb-1">
+                    <button onclick="changeBGM('hard', '${id}')" class="flex-1 pixel-button text-[10px] ${userData.currentHardBGM === id ? 'bg-yellow-500 text-black font-black' : ''}">${id.toUpperCase()}</button>
+                    <button onclick="Sound.playSample('hard', '${id}')" class="pixel-button px-3 bg-blue-900 text-[10px] font-bold">▶試聴</button>
+                </div>`).join('');
         }
 
         function changeBG(id) { Sound.click(); userData.currentBG = id; updateGlobalUI(); renderCustomize(); }
@@ -579,6 +664,10 @@
             document.getElementById('refresh-item-btn').innerText = `REFRESH(${state.itemsRemaining})`;
             document.getElementById('refresh-item-btn').classList.remove('opacity-40');
             
+            // ポーズボタンを表示
+            document.getElementById('pause-btn-global').classList.remove('hidden');
+            document.getElementById('pause-icon-global').innerText = "II";
+
             Sound.init(); Sound.startBGM();
             document.getElementById('start-screen').classList.add('hidden'); 
             document.getElementById('endless-home-screen').classList.add('hidden');
@@ -588,22 +677,91 @@
             nextQuestion();
         }
 
+        // --- 難易度別の請求金額 & 所持金（財布）配分ロジック ---
+        function generatePrice(difficulty, rand) {
+            if (difficulty === 'nightmare') {
+                // ナイトメア: 15,000円〜185,000円（高額紙幣＋細部端数）
+                return Math.floor(rand() * 170000) + 15000 + Math.floor(rand() * 999);
+            } else if (difficulty === 'hard') {
+                // ハード: 3,500円〜28,000円
+                return Math.floor(rand() * 24500) + 3500;
+            } else {
+                // ノーマル / エンドレス: 380円〜9,800円
+                return Math.floor(rand() * 9420) + 380;
+            }
+        }
+
+        function generateWallet(price, rand, difficulty) {
+            let w = {};
+            COIN_TYPES.forEach(c => w[c.val] = 0);
+
+            if (difficulty === 'nightmare') {
+                // 1万円・5千円・2千円が乱れ飛ぶ。1円・5円も豊富
+                w[10000] = Math.floor(price / 10000) + Math.floor(rand() * 3);
+                w[5000]  = Math.floor(rand() * 3);
+                w[2000]  = rand() > 0.4 ? Math.floor(rand() * 3) + 1 : 0;
+                w[1000]  = Math.floor(rand() * 6);
+                w[500]   = Math.floor(rand() * 3);
+                w[100]   = Math.floor(rand() * 5);
+                w[50]    = Math.floor(rand() * 3);
+                w[10]    = Math.floor(rand() * 6);
+                w[5]     = Math.floor(rand() * 3);
+                w[1]     = Math.floor(rand() * 8);
+            } else if (difficulty === 'hard') {
+                // ハード: お札がギリギリ、小銭が意地悪に偏っている（端数が出しにくい設計）
+                w[10000] = price >= 10000 ? Math.floor(price / 10000) : (rand() > 0.5 ? 1 : 0);
+                w[5000]  = Math.floor(rand() * 2);
+                w[2000]  = rand() > 0.7 ? 1 : 0;
+                w[1000]  = Math.floor(rand() * 4);
+                w[500]   = Math.floor(rand() * 2);
+                w[100]   = Math.floor(rand() * 4);
+                w[50]    = Math.floor(rand() * 2);
+                w[10]    = Math.floor(rand() * 4);
+                w[5]     = Math.floor(rand() * 2);
+                w[1]     = Math.floor(rand() * 5);
+            } else {
+                // ノーマル: 小銭がバランスよく潤沢。端数ぴったりや500円玉お釣り狙いが狙いやすい
+                w[10000] = price >= 10000 ? 1 : 0;
+                w[5000]  = price >= 5000 && rand() > 0.3 ? 1 : 0;
+                w[2000]  = rand() > 0.8 ? 1 : 0;
+                w[1000]  = Math.floor(rand() * 4) + 1;
+                w[500]   = Math.floor(rand() * 2);
+                w[100]   = Math.floor(rand() * 5) + 1;
+                w[50]    = Math.floor(rand() * 2);
+                w[10]    = Math.floor(rand() * 5) + 1;
+                w[5]     = Math.floor(rand() * 2);
+                w[1]     = Math.floor(rand() * 6) + 1;
+            }
+
+            // 財布の合計が請求金額に満たない場合は、支払い可能な最低限の紙幣を補充
+            let total = Object.keys(w).reduce((acc, k) => acc + (w[k] * Number(k)), 0);
+            while (total < price) {
+                if (price >= 10000 && w[10000] < Math.floor(price / 10000) + 1) {
+                    w[10000]++;
+                    total += 10000;
+                } else if (price >= 5000 && w[5000] === 0) {
+                    w[5000]++;
+                    total += 5000;
+                } else {
+                    w[1000]++;
+                    total += 1000;
+                }
+            }
+            return w;
+        }
+
         function nextQuestion() {
             if (state.currentStep >= state.totalSteps) { showResult(); return; }
             state.currentStep++; state.inputAmount = 0; state.timeLeft = 15; state.isTransitioning = true; state.history = [];
             const randFunc = (state.difficulty === 'vs') ? mulberry32(userData.coins + state.currentStep) : Math.random;
-            state.price = Math.floor(randFunc() * (state.difficulty==='nightmare'?140000:25000)) + 1200;
-            state.wallet = generateWallet(state.price, randFunc); state.initialWallet = {...state.wallet};
-            updateUI(); startTimer(); setTimeout(() => { state.isTransitioning = false; updateUI(); }, 500);
-        }
-
-        function generateWallet(price, randFunc) {
-            let w = {}; COIN_TYPES.forEach(c => w[c.val] = 0);
-            w[10000] = Math.floor(price / 10000) + 1; w[2000] = randFunc() > 0.7 ? 1 : 0;
-            w[500] = Math.floor(randFunc() * 3); w[100] = Math.floor(randFunc() * 5); w[10] = Math.floor(randFunc() * 5);
-            let cur = Object.keys(w).reduce((acc, k) => acc + (w[k] * k), 0);
-            while(cur < price) { w[1000]++; cur += 1000; }
-            return w;
+            
+            state.price = generatePrice(state.difficulty, randFunc);
+            state.wallet = generateWallet(state.price, randFunc, state.difficulty);
+            state.initialWallet = {...state.wallet};
+            
+            updateUI(); 
+            startTimer(); 
+            setTimeout(() => { state.isTransitioning = false; updateUI(); }, 400);
         }
 
         function updateUI() {
@@ -622,17 +780,30 @@
             }
             document.getElementById('price-display').innerText = `¥${state.price.toLocaleString()}`;
             document.getElementById('input-display').innerText = `¥${state.inputAmount.toLocaleString()}`;
-            const grid = document.getElementById('coin-grid'); grid.innerHTML = '';
+            
+            const grid = document.getElementById('coin-grid'); 
+            grid.innerHTML = '';
             COIN_TYPES.forEach(coin => {
-                const count = state.wallet[coin.val] || 0; const btn = document.createElement('button');
+                const count = state.wallet[coin.val] || 0; 
+                const btn = document.createElement('button');
+                btn.type = 'button';
                 btn.className = `pixel-button flex flex-col items-center justify-center py-2 ${coin.class} ${count===0?'opacity-20 pointer-events-none':''}`;
                 btn.innerHTML = `<span class="text-[9px] font-black">${coin.label}</span><span class="text-[9px] font-bold">x${count}</span>`;
-                btn.onclick = () => { if(state.isPaused) return; Sound.coin(); state.wallet[coin.val]--; state.inputAmount += coin.val; state.history.push(coin.val); updateUI(); };
+                btn.onclick = () => { 
+                    if(state.isPaused || state.isTransitioning) return; 
+                    Sound.coin(); 
+                    state.wallet[coin.val]--; 
+                    state.inputAmount += coin.val; 
+                    state.history.push(coin.val); 
+                    updateUI(); 
+                };
                 grid.appendChild(btn);
             });
+
             const payBtn = document.createElement('button');
+            payBtn.type = 'button';
             const isShort = state.inputAmount < state.price;
-            payBtn.className = `pixel-button col-span-2 text-sm font-black ${isShort || state.isTransitioning ? 'opacity-50':'bg-yellow-500 text-black'}`;
+            payBtn.className = `pixel-button col-span-2 text-sm font-black ${isShort || state.isTransitioning ? 'opacity-50':'bg-yellow-500 text-black active:bg-yellow-400'}`;
             payBtn.innerText = state.isTransitioning ? "READY..." : (isShort ? "足りません" : "支払う！");
             payBtn.onclick = () => { if(!isShort && !state.isTransitioning) handlePay(); };
             grid.appendChild(payBtn);
@@ -643,26 +814,51 @@
             state.timer = setInterval(() => {
                 if (state.isPaused) return;
                 state.timeLeft -= 0.05;
-                document.getElementById('timer-bar').style.width = `${(state.timeLeft/15)*100}%`;
+                document.getElementById('timer-bar').style.width = `${(Math.max(0, state.timeLeft)/15)*100}%`;
                 document.getElementById('timer-label').innerText = `${Math.max(0, state.timeLeft).toFixed(2)}s`;
-                if (state.timeLeft <= 0) { clearInterval(state.timer); if(state.difficulty==='vs') state.vsPenalty += 1.0; handlePay(); }
+                if (state.timeLeft <= 0) { 
+                    clearInterval(state.timer); 
+                    if(state.difficulty==='vs') state.vsPenalty += 1.0; 
+                    handlePay(); 
+                }
             }, 50);
         }
 
         function handlePay() {
-            if(state.isTransitioning) return; clearInterval(state.timer); state.isTransitioning = true; updateUI();
+            if(state.isTransitioning) return; 
+            clearInterval(state.timer); 
+            state.isTransitioning = true; 
+            updateUI();
+
             const change = state.inputAmount - state.price;
-            if (change === 0) { Sound.perfect(); if (state.difficulty === 'endless') state.totalChangeCoins = Math.max(0, state.totalChangeCoins - 1); }
-            else { if (state.difficulty !== 'vs') {
-                let coinCount = 0; let temp = change; [10000, 5000, 2000, 1000, 500, 100, 50, 10, 5, 1].forEach(c => { coinCount += Math.floor(temp/c); temp %= c; });
-                state.totalChangeCoins += coinCount;
-            }}
-            document.getElementById('clerk-reaction').innerText = change === 0 ? "PERFECT!" : "OK";
-            setTimeout(() => { document.getElementById('clerk-reaction').innerText = ""; nextQuestion(); }, 1200);
+            if (change === 0) { 
+                Sound.perfect(); 
+                if (state.difficulty === 'endless') state.totalChangeCoins = Math.max(0, state.totalChangeCoins - 1); 
+            } else { 
+                if (state.difficulty !== 'vs') {
+                    let coinCount = 0; 
+                    let temp = change; 
+                    [10000, 5000, 2000, 1000, 500, 100, 50, 10, 5, 1].forEach(c => { 
+                        coinCount += Math.floor(temp/c); 
+                        temp %= c; 
+                    });
+                    state.totalChangeCoins += coinCount;
+                }
+            }
+
+            document.getElementById('clerk-reaction').innerText = change === 0 ? "PERFECT!" : `お釣り: ¥${change.toLocaleString()}`;
+            setTimeout(() => { 
+                document.getElementById('clerk-reaction').innerText = ""; 
+                nextQuestion(); 
+            }, 1200);
         }
 
         function showResult() {
-            Sound.stopBGM(); document.getElementById('play-screen').classList.add('hidden'); document.getElementById('play-screen').classList.remove('flex');
+            Sound.stopBGM(); 
+            document.getElementById('pause-btn-global').classList.add('hidden');
+            document.getElementById('play-screen').classList.add('hidden'); 
+            document.getElementById('play-screen').classList.remove('flex');
+            
             let coinBonus = (state.difficulty === 'normal') ? 1 : (state.difficulty === 'hard' ? 2 : 5);
             let rankId = state.totalChangeCoins <= 10 ? "nightmare-god" : (state.totalChangeCoins <= 30 ? "god" : (state.totalChangeCoins <= 50 ? "wizard" : "pan-man"));
 
@@ -676,9 +872,15 @@
         }
 
         function triggerNightmareIntro() {
-            Sound.glitch(); const overlay = document.getElementById('nightmare-intro-overlay');
-            overlay.classList.remove('hidden'); document.body.classList.add('intro-shaking');
-            setTimeout(() => { overlay.classList.add('hidden'); document.body.classList.remove('intro-shaking'); startGame('nightmare'); }, 1800);
+            Sound.glitch(); 
+            const overlay = document.getElementById('nightmare-intro-overlay');
+            overlay.classList.remove('hidden'); 
+            document.body.classList.add('intro-shaking');
+            setTimeout(() => { 
+                overlay.classList.add('hidden'); 
+                document.body.classList.remove('intro-shaking'); 
+                startGame('nightmare'); 
+            }, 1800);
         }
 
         function renderTitleList() {
@@ -686,10 +888,13 @@
         }
 
         function playEnding() {
-            state.isEnding = true; document.body.classList.add('mode-ending');
+            state.isEnding = true; 
+            document.body.classList.add('mode-ending');
             document.getElementById('result-screen').classList.add('hidden');
             document.getElementById('ending-screen').classList.remove('hidden');
-            Sound.startBGM(); const lines = document.querySelectorAll('.ending-text-line'); let i = 0;
+            Sound.startBGM(); 
+            const lines = document.querySelectorAll('.ending-text-line'); 
+            let i = 0;
             const next = () => {
                 if (i > 0) lines[i-1].classList.remove('active');
                 if (i < lines.length) { lines[i].classList.add('active'); i++; setTimeout(next, 3500); }
@@ -701,7 +906,6 @@
         function showMsg(t) { document.getElementById('msg-text').innerText = t; document.getElementById('msg-box').classList.remove('hidden'); }
         function handleSecretEndingTap() { if (state.currentStep === 0 || state.isEnding) return; state.secretEndingCount++; if (state.secretEndingCount >= 7) { state.secretEndingCount = 0; playEnding(); } }
 
-        // 初期化実行
         updateGlobalUI();
     </script>
 </body>
