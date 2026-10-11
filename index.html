@@ -15,6 +15,7 @@
             user-select: none;
             -webkit-user-select: none;
             -webkit-touch-callout: none;
+            box-sizing: border-box;
         }
 
         .hidden {
@@ -76,7 +77,7 @@
             color: #fff;
             position: relative;
             box-shadow: 4px 4px 0px #555;
-            transition: all 0.05s;
+            transition: transform 0.05s, box-shadow 0.05s;
             cursor: pointer;
             touch-action: manipulation;
         }
@@ -169,7 +170,6 @@
     <div class="crt-scanlines"></div>
     <div class="crt-flicker"></div>
 
-    <!-- オーバーレイ -->
     <div id="nightmare-intro-overlay" class="hidden fixed inset-0 z-[1500] bg-red-900/80 flex flex-col items-center justify-center pointer-events-none text-center">
         <div class="text-6xl font-black text-white italic mb-4" style="text-shadow: 4px 4px #000;">NIGHTMARE</div>
         <div class="text-2xl font-bold text-white tracking-[1em]">STARTING...</div>
@@ -194,7 +194,6 @@
         </div>
     </div>
 
-    <!-- ヘッダーUI -->
     <div class="fixed top-4 right-4 z-[500] flex gap-2">
         <button id="pause-btn-global" onclick="togglePause()" class="hidden w-10 h-10 pixel-border flex items-center justify-center bg-black text-white hover:bg-gray-800">
             <span id="pause-icon-global">II</span>
@@ -209,8 +208,7 @@
         <button onclick="document.getElementById('msg-box').classList.add('hidden')" class="pixel-button px-4 py-1 text-xs">OK</button>
     </div>
 
-    <!-- メインコンテナ -->
-    <div id="game-container" class="relative w-full max-w-md h-full max-h-[760px] flex flex-col overflow-hidden border-4 border-white transition-all duration-300">
+    <div id="game-container" class="relative w-full max-w-md h-full max-h-[760px] flex flex-col overflow-hidden border-4 border-white">
         
         <!-- スタート画面 -->
         <div id="start-screen" class="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black p-8 text-center border-white">
@@ -218,7 +216,7 @@
                 <div id="secret-trigger" onclick="tapSecret()" class="text-7xl animate-bounce cursor-pointer select-none">💰</div>
                 <div id="nightmare-hint" class="hidden absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-red-500 font-bold whitespace-nowrap animate-pulse">💰x10...？</div>
             </div>
-            <h1 class="text-4xl font-black text-yellow-400 mb-2 tracking-widest text-shadow uppercase">レジレジパニック</h1>
+            <h1 class="text-4xl font-black text-yellow-400 mb-2 tracking-widest uppercase">レジレジパニック</h1>
             
             <div class="mb-6 text-xs flex gap-4 justify-center items-center">
                 <span class="text-yellow-500 font-bold">MY COINS: <span id="coin-display-ui">0</span> 🪙</span>
@@ -226,17 +224,17 @@
 
             <div class="w-full space-y-3">
                 <div class="grid grid-cols-2 gap-3">
-                    <button onclick="startGame('normal')" class="pixel-button py-4 text-xl font-bold bg-white text-black active:bg-yellow-400">Normal</button>
-                    <button onclick="startGame('hard')" class="pixel-button py-4 text-xl font-bold bg-red-600 text-white active:bg-red-500">Hard</button>
+                    <button type="button" onclick="startGame('normal')" class="pixel-button py-4 text-xl font-bold bg-white text-black active:bg-yellow-400">Normal</button>
+                    <button type="button" onclick="startGame('hard')" class="pixel-button py-4 text-xl font-bold bg-red-600 text-white active:bg-red-500">Hard</button>
                 </div>
-                <button onclick="showVSMenu()" class="pixel-button w-full py-4 text-xl font-bold bg-blue-600 text-white italic uppercase">VS MODE</button>
+                <button type="button" onclick="showVSMenu()" class="pixel-button w-full py-4 text-xl font-bold bg-blue-600 text-white italic uppercase">VS MODE</button>
                 <div class="grid grid-cols-2 gap-3">
-                    <button onclick="showEndlessHome()" class="pixel-button py-2 text-sm font-bold bg-green-600 text-white">Endless</button>
-                    <button onclick="showGachaMenu()" class="pixel-button py-2 text-sm font-bold bg-pink-600 text-white">ガチャ (10🪙)</button>
+                    <button type="button" onclick="showEndlessHome()" class="pixel-button py-2 text-sm font-bold bg-green-600 text-white">Endless</button>
+                    <button type="button" onclick="showGachaMenu()" class="pixel-button py-2 text-sm font-bold bg-pink-600 text-white">ガチャ (10🪙)</button>
                 </div>
                 <div class="grid grid-cols-2 gap-3 pt-2">
-                    <button onclick="toggleCollection(true)" class="pixel-button py-2 text-xs font-bold bg-blue-900 text-white uppercase">称号図鑑</button>
-                    <button onclick="toggleCustomize(true)" class="pixel-button py-2 text-xs font-bold bg-gray-700 text-white uppercase">Customize</button>
+                    <button type="button" onclick="toggleCollection(true)" class="pixel-button py-2 text-xs font-bold bg-blue-900 text-white uppercase">称号図鑑</button>
+                    <button type="button" onclick="toggleCustomize(true)" class="pixel-button py-2 text-xs font-bold bg-gray-700 text-white uppercase">Customize</button>
                 </div>
             </div>
         </div>
@@ -380,46 +378,8 @@
         </div>
     </div>
 
-    <!-- スクリプト -->
-    <script type="module">
-        let db = null;
-        let auth = null;
-        let appId = 'cashier-panic-v3';
-
-        // Firebaseが利用可能な場合のみ初期化（設定不備で停止するのを防止）
-        try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                const { initializeApp } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js");
-                const { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js");
-                const { getFirestore, doc, setDoc, getDoc } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
-                
-                const firebaseConfig = JSON.parse(__firebase_config);
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                if (typeof __app_id !== 'undefined') appId = __app_id;
-
-                onAuthStateChanged(auth, async (u) => { 
-                    user = u; 
-                    if (user && db) {
-                        try {
-                            const snap = await getDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'));
-                            if (snap.exists()) userData = snap.data();
-                        } catch(e) {}
-                        updateGlobalUI();
-                    }
-                });
-
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            }
-        } catch (e) {
-            console.warn("Firebase offline/fallback mode:", e);
-        }
-
+    <!-- 即座に実行されるメインスクリプト（非module） -->
+    <script>
         const COIN_TYPES = [
             { val: 10000, label: "10,000", class: "coin-10000" }, { val: 5000, label: "5,000", class: "coin-5000" },
             { val: 2000, label: "2,000", class: "coin-2000" }, { val: 1000, label: "1,000", class: "coin-1000" },
@@ -447,7 +407,6 @@
             { type: 'hbgm', id: 'v2', name: 'Hard BGM Arrange A' }, { type: 'hbgm', id: 'v3', name: 'Hard BGM Arrange B' }
         ];
 
-        let user = null;
         let userData = {
             coins: 0, unlockedBG: ['default'], unlockedNormalBGM: ['v1'], unlockedHardBGM: ['v1'],
             currentBG: 'default', currentNormalBGM: 'v1', currentHardBGM: 'v1', titles: []
@@ -523,16 +482,6 @@
             glitch() { for(let i=0; i<15; i++) { setTimeout(() => this.play(Math.random()*200 + 40, 'sawtooth', 0.1, 0.2), i*50); } }
         };
 
-        async function syncUserData() { 
-            if (user && db) {
-                try {
-                    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
-                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), userData);
-                } catch(e) {}
-            }
-            updateGlobalUI(); 
-        }
-
         function updateGlobalUI() {
             document.getElementById('coin-display-ui').innerText = userData.coins;
             document.body.className = `bg-${userData.currentBG}`;
@@ -551,22 +500,20 @@
             }
         }
 
-        // --- 全てのonclick用関数を確実にwindowへ公開 ---
-        window.Sound = Sound;
-        window.tapSecret = () => { state.secretTaps++; Sound.init(); if (state.secretTaps >= 10) { state.secretTaps = 0; triggerNightmareIntro(); } };
-        window.showVSMenu = () => { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('vs-menu-screen').classList.remove('hidden'); };
-        window.hideVSMenu = () => { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('vs-menu-screen').classList.add('hidden'); };
-        window.showGachaMenu = () => { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('gacha-screen').classList.remove('hidden'); };
-        window.hideGachaMenu = () => { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('gacha-screen').classList.add('hidden'); };
-        window.showEndlessHome = () => { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('endless-home-screen').classList.remove('hidden'); };
-        window.hideEndlessHome = () => { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('endless-home-screen').classList.add('hidden'); };
-        window.toggleCustomize = (show) => { Sound.click(); document.getElementById('customize-screen').classList.toggle('hidden', !show); if(show) { window.renderCustomize(); document.getElementById('gacha-screen').classList.add('hidden'); document.getElementById('start-screen').classList.add('hidden'); } else { document.getElementById('start-screen').classList.remove('hidden'); } };
-        window.toggleCollection = (show) => { Sound.click(); document.getElementById('collection-screen').classList.toggle('hidden', !show); if(show) { document.getElementById('start-screen').classList.add('hidden'); renderTitleList(); } else { document.getElementById('start-screen').classList.remove('hidden'); } };
-        window.togglePause = () => { if (state.currentStep === 0) return; state.isPaused = !state.isPaused; const ps = document.getElementById('pause-screen'); const pi = document.getElementById('pause-icon-global'); if(state.isPaused) { ps.classList.remove('hidden'); pi.innerText = "▶"; } else { ps.classList.add('hidden'); pi.innerText = "II"; } };
-        window.undoInput = () => { if(state.isPaused || state.history.length === 0) return; Sound.click(); const lastVal = state.history.pop(); state.wallet[lastVal]++; state.inputAmount -= lastVal; updateUI(); };
-        window.resetInput = () => { if(state.isPaused) return; Sound.click(); state.wallet = {...state.initialWallet}; state.inputAmount = 0; state.history = []; updateUI(); };
+        function tapSecret() { state.secretTaps++; Sound.init(); if (state.secretTaps >= 10) { state.secretTaps = 0; triggerNightmareIntro(); } }
+        function showVSMenu() { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('vs-menu-screen').classList.remove('hidden'); }
+        function hideVSMenu() { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('vs-menu-screen').classList.add('hidden'); }
+        function showGachaMenu() { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('gacha-screen').classList.remove('hidden'); }
+        function hideGachaMenu() { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('gacha-screen').classList.add('hidden'); }
+        function showEndlessHome() { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('endless-home-screen').classList.remove('hidden'); }
+        function hideEndlessHome() { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('endless-home-screen').classList.add('hidden'); }
+        function toggleCustomize(show) { Sound.click(); document.getElementById('customize-screen').classList.toggle('hidden', !show); if(show) { renderCustomize(); document.getElementById('gacha-screen').classList.add('hidden'); document.getElementById('start-screen').classList.add('hidden'); } else { document.getElementById('start-screen').classList.remove('hidden'); } }
+        function toggleCollection(show) { Sound.click(); document.getElementById('collection-screen').classList.toggle('hidden', !show); if(show) { document.getElementById('start-screen').classList.add('hidden'); renderTitleList(); } else { document.getElementById('start-screen').classList.remove('hidden'); } }
+        function togglePause() { if (state.currentStep === 0) return; state.isPaused = !state.isPaused; const ps = document.getElementById('pause-screen'); const pi = document.getElementById('pause-icon-global'); if(state.isPaused) { ps.classList.remove('hidden'); pi.innerText = "▶"; } else { ps.classList.add('hidden'); pi.innerText = "II"; } }
+        function undoInput() { if(state.isPaused || state.history.length === 0) return; Sound.click(); const lastVal = state.history.pop(); state.wallet[lastVal]++; state.inputAmount -= lastVal; updateUI(); }
+        function resetInput() { if(state.isPaused) return; Sound.click(); state.wallet = {...state.initialWallet}; state.inputAmount = 0; state.history = []; updateUI(); }
 
-        window.useRefreshItem = () => {
+        function useRefreshItem() {
             if(state.isPaused || state.itemsRemaining <= 0) return;
             state.itemsRemaining--;
             Sound.click();
@@ -577,14 +524,14 @@
             state.inputAmount = 0;
             state.history = [];
             updateUI();
-        };
+        }
 
-        window.pullGacha = async () => {
+        function pullGacha() {
             if (userData.coins < 10) { showMsg("10コイン必要です🪙"); return; }
             Sound.click(); userData.coins -= 10;
             const vis = document.getElementById('gacha-visual'); const st = document.getElementById('gacha-status'); const btn = document.getElementById('gacha-pull-btn');
             btn.disabled = true; vis.classList.add('gacha-anim'); st.innerText = "ガチャを回しています...";
-            setTimeout(async () => {
+            setTimeout(() => {
                 vis.classList.remove('gacha-anim');
                 const reward = GACHA_ITEMS[Math.floor(Math.random() * GACHA_ITEMS.length)];
                 let isNew = false;
@@ -592,23 +539,23 @@
                 else if (reward.type === 'nbgm' && !userData.unlockedNormalBGM.includes(reward.id)) { userData.unlockedNormalBGM.push(reward.id); isNew = true; }
                 else if (reward.type === 'hbgm' && !userData.unlockedHardBGM.includes(reward.id)) { userData.unlockedHardBGM.push(reward.id); isNew = true; }
                 st.innerHTML = `獲得: <span class="text-white font-bold">${reward.name}</span><br>${isNew ? '✨NEW!✨' : '（既に所持しています）'}`;
-                btn.disabled = false; await syncUserData();
+                btn.disabled = false; updateGlobalUI();
             }, 1500);
-        };
+        }
 
-        window.renderCustomize = () => {
+        function renderCustomize() {
             const bgC = document.getElementById('bg-selector');
             bgC.innerHTML = userData.unlockedBG.map(id => `<button onclick="changeBG('${id}')" class="w-10 h-10 pixel-border bg-${id} ${userData.currentBG === id ? 'ring-2 ring-yellow-400' : ''}"></button>`).join('');
             const nC = document.getElementById('normal-bgm-selector');
             nC.innerHTML = userData.unlockedNormalBGM.map(id => `<div class="flex gap-2 mb-1"><button onclick="changeBGM('normal', '${id}')" class="flex-1 pixel-button text-[10px] ${userData.currentNormalBGM === id ? 'bg-yellow-500 text-black' : ''}">${id.toUpperCase()}</button><button onclick="Sound.playSample('normal', '${id}')" class="pixel-button px-2 bg-blue-900 text-[10px]">▶試聴</button></div>`).join('');
             const hC = document.getElementById('hard-bgm-selector');
             hC.innerHTML = userData.unlockedHardBGM.map(id => `<div class="flex gap-2 mb-1"><button onclick="changeBGM('hard', '${id}')" class="flex-1 pixel-button text-[10px] ${userData.currentHardBGM === id ? 'bg-yellow-500 text-black' : ''}">${id.toUpperCase()}</button><button onclick="Sound.playSample('hard', '${id}')" class="pixel-button px-2 bg-blue-900 text-[10px]">▶試聴</button></div>`).join('');
-        };
+        }
 
-        window.changeBG = async (id) => { Sound.click(); userData.currentBG = id; await syncUserData(); window.renderCustomize(); };
-        window.changeBGM = async (type, id) => { Sound.click(); if(type==='normal') userData.currentNormalBGM = id; else userData.currentHardBGM = id; await syncUserData(); window.renderCustomize(); };
+        function changeBG(id) { Sound.click(); userData.currentBG = id; updateGlobalUI(); renderCustomize(); }
+        function changeBGM(type, id) { Sound.click(); if(type==='normal') userData.currentNormalBGM = id; else userData.currentHardBGM = id; updateGlobalUI(); renderCustomize(); }
 
-        window.copyVSUrl = () => { 
+        function copyVSUrl() { 
             const k = document.getElementById('vs-keyword').value; 
             if (!k) { showMsg("合言葉を入力してください"); return; }
             const url = new URL(window.location.href); url.searchParams.set('vs', k);
@@ -619,20 +566,12 @@
                 dummy.value = url.toString(); dummy.select(); document.execCommand("copy"); document.body.removeChild(dummy);
                 showMsg("対戦URLをコピーしました！");
             }
-        };
+        }
 
-        window.startGame = async (difficulty) => {
+        function startGame(difficulty) {
             state.difficulty = difficulty; state.totalChangeCoins = 0; state.currentStep = 0; state.isPaused = false; state.isEnding = false; state.vsPenalty = 0;
             if (difficulty === 'vs') {
                 state.vsKeyword = document.getElementById('vs-keyword').value || "FREE"; state.totalSteps = 10; state.vsStartTime = Date.now();
-                let seed = 0; for (let i = 0; i < state.vsKeyword.length; i++) seed += state.vsKeyword.charCodeAt(i);
-                mulberry32(seed);
-                if (user && db) {
-                    try {
-                        const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
-                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', state.vsKeyword), { [user.uid]: { status: 'playing' } }, { merge: true });
-                    } catch(e) {}
-                }
             } else if (difficulty === 'endless') { state.totalSteps = Infinity; state.itemsRemaining = 2; }
             else if (difficulty === 'nightmare') { state.totalSteps = 10; state.itemsRemaining = 1; }
             else { state.totalSteps = 10; state.itemsRemaining = 3; }
@@ -647,7 +586,7 @@
             document.getElementById('play-screen').classList.remove('hidden'); 
             document.getElementById('play-screen').classList.add('flex'); 
             nextQuestion();
-        };
+        }
 
         function nextQuestion() {
             if (state.currentStep >= state.totalSteps) { showResult(); return; }
@@ -722,65 +661,24 @@
             setTimeout(() => { document.getElementById('clerk-reaction').innerText = ""; nextQuestion(); }, 1200);
         }
 
-        async function showResult() {
+        function showResult() {
             Sound.stopBGM(); document.getElementById('play-screen').classList.add('hidden'); document.getElementById('play-screen').classList.remove('flex');
-            let coinBonus = 0;
-            if (state.difficulty === 'normal') coinBonus = 1;
-            else if (state.difficulty === 'hard') coinBonus = 2;
-            else if (state.difficulty === 'nightmare') coinBonus = 5;
+            let coinBonus = (state.difficulty === 'normal') ? 1 : (state.difficulty === 'hard' ? 2 : 5);
+            let rankId = state.totalChangeCoins <= 10 ? "nightmare-god" : (state.totalChangeCoins <= 30 ? "god" : (state.totalChangeCoins <= 50 ? "wizard" : "pan-man"));
 
-            let rankId = "pan-man"; 
-            if (state.totalChangeCoins <= 10) rankId = "nightmare-god"; 
-            else if (state.totalChangeCoins <= 30) rankId = "god";
-            else if (state.totalChangeCoins <= 50) rankId = "wizard";
-
-            if (state.difficulty === 'vs') {
-                const totalSeconds = (Date.now() - state.vsStartTime) / 1000 + state.vsPenalty;
-                if (user && db) {
-                    try {
-                        const { doc, setDoc, getDoc } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js");
-                        const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', state.vsKeyword);
-                        await setDoc(matchRef, { [user.uid]: { status: 'finished', time: totalSeconds } }, { merge: true });
-                        const snap = await getDoc(matchRef);
-                        const data = snap.data() || {};
-                        const players = Object.keys(data);
-                        if (players.length >= 2) {
-                            const opp = players.find(id => id !== user.uid);
-                            const outcomeEl = document.getElementById('vs-outcome');
-                            if (opp && data[opp].status === 'finished') {
-                                if (totalSeconds < data[opp].time) { coinBonus = 2; outcomeEl.innerText = "勝利"; outcomeEl.style.color = "#fbbf24"; }
-                                else { coinBonus = 0; outcomeEl.innerText = "敗北"; outcomeEl.style.color = "#ef4444"; }
-                                outcomeEl.classList.remove('hidden');
-                            }
-                        }
-                    } catch(e) {}
-                }
-                document.getElementById('total-change-coins').innerText = `${totalSeconds.toFixed(2)}s`;
-            } else {
-                document.getElementById('total-change-coins').innerText = `${state.totalChangeCoins}枚`;
-            }
-
-            if (!userData.titles.includes(rankId)) {
-                const t = ALL_TITLES.find(x => x.id === rankId);
-                if(t) {
-                    coinBonus += (rankId === "nightmare-god" ? 10 : (t.rarity === 'rare' ? 2 : 1));
-                    userData.titles.push(rankId);
-                    document.getElementById('new-title-badge').classList.remove('hidden');
-                }
-            }
-
+            document.getElementById('total-change-coins').innerText = `${state.totalChangeCoins}枚`;
             userData.coins += coinBonus;
             document.getElementById('earned-coins').innerText = coinBonus;
             document.getElementById('final-rank-text').innerText = ALL_TITLES.find(t => t.id === rankId)?.name || "庶民";
             document.getElementById('result-screen').classList.remove('hidden');
             if (rankId === "nightmare-god" && state.difficulty === 'nightmare') playEnding();
-            await syncUserData();
+            updateGlobalUI();
         }
 
         function triggerNightmareIntro() {
             Sound.glitch(); const overlay = document.getElementById('nightmare-intro-overlay');
             overlay.classList.remove('hidden'); document.body.classList.add('intro-shaking');
-            setTimeout(() => { overlay.classList.add('hidden'); document.body.classList.remove('intro-shaking'); window.startGame('nightmare'); }, 1800);
+            setTimeout(() => { overlay.classList.add('hidden'); document.body.classList.remove('intro-shaking'); startGame('nightmare'); }, 1800);
         }
 
         function renderTitleList() {
@@ -801,8 +699,9 @@
         }
 
         function showMsg(t) { document.getElementById('msg-text').innerText = t; document.getElementById('msg-box').classList.remove('hidden'); }
-        window.handleSecretEndingTap = () => { if (state.currentStep === 0 || state.isEnding) return; state.secretEndingCount++; if (state.secretEndingCount >= 7) { state.secretEndingCount = 0; playEnding(); } };
+        function handleSecretEndingTap() { if (state.currentStep === 0 || state.isEnding) return; state.secretEndingCount++; if (state.secretEndingCount >= 7) { state.secretEndingCount = 0; playEnding(); } }
 
+        // 初期化実行
         updateGlobalUI();
     </script>
 </body>
