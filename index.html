@@ -13,6 +13,13 @@
             image-rendering: pixelated;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        /* hiddenが確実に効くように最優先指定 */
+        .hidden {
+            display: none !important;
         }
 
         body {
@@ -35,17 +42,15 @@
         body.bg-cyber { background-color: #330033; }
         body.bg-forest { background-color: #002200; }
 
-        /* ブラウン管演出 */
-        body::after {
-            content: " ";
-            display: block;
+        /* ブラウン管演出（擬似要素から通常のdivに変更してタッチ抜けを保証） */
+        .crt-scanlines {
             position: fixed;
-            top: 0; left: 0; bottom: 0; right: 0;
+            inset: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
                         linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
             background-size: 100% 3px, 3px 100%;
-            pointer-events: none;
-            z-index: 1000;
+            pointer-events: none !important;
+            z-index: 998;
         }
 
         .crt-flicker {
@@ -53,7 +58,7 @@
             position: fixed;
             inset: 0;
             background: rgba(18, 16, 16, 0.05);
-            pointer-events: none;
+            pointer-events: none !important;
             z-index: 999;
         }
 
@@ -76,6 +81,7 @@
             box-shadow: 4px 4px 0px #555;
             transition: all 0.05s;
             cursor: pointer;
+            touch-action: manipulation;
         }
         .pixel-button:active:not(:disabled) {
             transform: translate(2px, 2px);
@@ -163,6 +169,8 @@
     </style>
 </head>
 <body class="bg-default">
+    <!-- エフェクト用レイヤー（確実にクリック透過） -->
+    <div class="crt-scanlines"></div>
     <div class="crt-flicker"></div>
 
     <!-- 各種オーバーレイレイヤー -->
@@ -173,7 +181,7 @@
 
     <div id="ending-screen" class="hidden fixed inset-0 z-[600] bg-black overflow-hidden flex flex-col items-center justify-center text-center">
         <div id="star-container" class="absolute inset-0 pointer-events-none"></div>
-        <div id="ending-text-container" class="relative w-full h-full flex items-center justify-center">
+        <div id="ending-text-container" class="relative w-full h-full flex items-center justify-center pointer-events-none">
             <p class="ending-text-line text-2xl text-white px-6" data-step="1">よくこの悪夢から目を覚ました</p>
             <div class="ending-text-line px-6" data-step="2">
                 <span class="text-sm text-gray-500 block mb-2 tracking-widest">称号</span>
@@ -382,7 +390,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -429,14 +437,16 @@
             isTransitioning: false, vsKeyword: "", vsStartTime: 0, vsPenalty: 0
         };
 
-        const PRESSURE_MESSAGES = ["早くして…", "チッ...", "ハァ...", "まだかな", "……", "後ろが詰まってる！", "小銭多いな…"];
-
         // --- Sound Engine ---
         const Sound = {
             ctx: null, isMuted: false, bgmTimer: null, bgmTempo: 0.18, bgmIndex: 0,
             init() { 
-                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
-                if (this.ctx.state === 'suspended') this.ctx.resume(); 
+                try {
+                    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
+                    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); 
+                } catch(e) {
+                    console.warn("AudioContext init error:", e);
+                }
             },
             toggleMute() { 
                 this.isMuted = !this.isMuted; 
@@ -445,9 +455,11 @@
             },
             play(freq, type, duration, vol = 0.1, delay = 0) { 
                 if (!this.ctx || this.isMuted) return; 
-                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain(); const now = this.ctx.currentTime + delay;
-                osc.type = type; osc.frequency.setValueAtTime(freq, now); gain.gain.setValueAtTime(vol, now); gain.gain.exponentialRampToValueAtTime(0.001, now + duration); 
-                osc.connect(gain); gain.connect(this.ctx.destination); osc.start(now); osc.stop(now + duration); 
+                try {
+                    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain(); const now = this.ctx.currentTime + delay;
+                    osc.type = type; osc.frequency.setValueAtTime(freq, now); gain.gain.setValueAtTime(vol, now); gain.gain.exponentialRampToValueAtTime(0.001, now + duration); 
+                    osc.connect(gain); gain.connect(this.ctx.destination); osc.start(now); osc.stop(now + duration); 
+                } catch(e) {}
             },
             getSeq(type, id) {
                 const normals = {
@@ -512,7 +524,6 @@
               return ((t ^ t >>> 14) >>> 0) / 4294967296;
             }
         }
-        let vsRandom = null;
 
         // Window scope for onclick
         window.tapSecret = () => { state.secretTaps++; Sound.init(); if (state.secretTaps >= 10) { state.secretTaps = 0; triggerNightmareIntro(); } };
@@ -520,11 +531,26 @@
         window.hideVSMenu = () => { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('vs-menu-screen').classList.add('hidden'); };
         window.showGachaMenu = () => { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('gacha-screen').classList.remove('hidden'); };
         window.hideGachaMenu = () => { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('gacha-screen').classList.add('hidden'); };
+        window.showEndlessHome = () => { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('endless-home-screen').classList.remove('hidden'); };
+        window.hideEndlessHome = () => { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('endless-home-screen').classList.add('hidden'); };
         window.toggleCustomize = (show) => { Sound.click(); document.getElementById('customize-screen').classList.toggle('hidden', !show); if(show) { window.renderCustomize(); document.getElementById('gacha-screen').classList.add('hidden'); document.getElementById('start-screen').classList.add('hidden'); } else { document.getElementById('start-screen').classList.remove('hidden'); } };
         window.toggleCollection = (show) => { Sound.click(); document.getElementById('collection-screen').classList.toggle('hidden', !show); if(show) { document.getElementById('start-screen').classList.add('hidden'); renderTitleList(); } else { document.getElementById('start-screen').classList.remove('hidden'); } };
         window.togglePause = () => { if (state.currentStep === 0) return; state.isPaused = !state.isPaused; const ps = document.getElementById('pause-screen'); const pi = document.getElementById('pause-icon-global'); if(state.isPaused) { ps.classList.remove('hidden'); pi.innerText = "▶"; } else { ps.classList.add('hidden'); pi.innerText = "II"; } };
         window.undoInput = () => { if(state.isPaused || state.history.length === 0) return; Sound.click(); const lastVal = state.history.pop(); state.wallet[lastVal]++; state.inputAmount -= lastVal; updateUI(); };
         window.resetInput = () => { if(state.isPaused) return; Sound.click(); state.wallet = {...state.initialWallet}; state.inputAmount = 0; state.history = []; updateUI(); };
+
+        window.useRefreshItem = () => {
+            if(state.isPaused || state.itemsRemaining <= 0) return;
+            state.itemsRemaining--;
+            Sound.click();
+            document.getElementById('refresh-item-btn').innerText = `REFRESH(${state.itemsRemaining})`;
+            if(state.itemsRemaining === 0) document.getElementById('refresh-item-btn').classList.add('opacity-40');
+            state.wallet = generateWallet(state.price, Math.random);
+            state.initialWallet = {...state.wallet};
+            state.inputAmount = 0;
+            state.history = [];
+            updateUI();
+        };
 
         window.pullGacha = async () => {
             if (userData.coins < 10) { showMsg("10コイン必要です🪙"); return; }
@@ -559,23 +585,38 @@
             const k = document.getElementById('vs-keyword').value; 
             if (!k) { showMsg("合言葉を入力してください"); return; }
             const url = new URL(window.location.href); url.searchParams.set('vs', k);
-            const dummy = document.createElement("textarea"); document.body.appendChild(dummy);
-            dummy.value = url.toString(); dummy.select(); document.execCommand("copy"); document.body.removeChild(dummy);
-            showMsg("対戦URLをコピーしました！");
+            navigator.clipboard.writeText(url.toString()).then(() => {
+                showMsg("対戦URLをコピーしました！");
+            }).catch(() => {
+                const dummy = document.createElement("textarea"); document.body.appendChild(dummy);
+                dummy.value = url.toString(); dummy.select(); document.execCommand("copy"); document.body.removeChild(dummy);
+                showMsg("対戦URLをコピーしました！");
+            });
         };
 
         window.startGame = async (difficulty) => {
-            if (!user) return; state.difficulty = difficulty; state.totalChangeCoins = 0; state.currentStep = 0; state.isPaused = false; state.isEnding = false; state.vsPenalty = 0;
+            state.difficulty = difficulty; state.totalChangeCoins = 0; state.currentStep = 0; state.isPaused = false; state.isEnding = false; state.vsPenalty = 0;
             if (difficulty === 'vs') {
                 state.vsKeyword = document.getElementById('vs-keyword').value || "FREE"; state.totalSteps = 10; state.vsStartTime = Date.now();
                 let seed = 0; for (let i = 0; i < state.vsKeyword.length; i++) seed += state.vsKeyword.charCodeAt(i);
-                mulberry32(seed); vsRandom = mulberry32(seed);
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', state.vsKeyword), { [user.uid]: { status: 'playing' } }, { merge: true });
+                mulberry32(seed);
+                if (user) {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', state.vsKeyword), { [user.uid]: { status: 'playing' } }, { merge: true });
+                }
             } else if (difficulty === 'endless') { state.totalSteps = Infinity; state.itemsRemaining = 2; }
             else if (difficulty === 'nightmare') { state.totalSteps = 10; state.itemsRemaining = 1; }
             else { state.totalSteps = 10; state.itemsRemaining = 3; }
+            
+            document.getElementById('refresh-item-btn').innerText = `REFRESH(${state.itemsRemaining})`;
+            document.getElementById('refresh-item-btn').classList.remove('opacity-40');
+            
             Sound.init(); Sound.startBGM();
-            document.getElementById('start-screen').classList.add('hidden'); document.getElementById('play-screen').classList.remove('hidden'); document.getElementById('play-screen').classList.add('flex'); nextQuestion();
+            document.getElementById('start-screen').classList.add('hidden'); 
+            document.getElementById('endless-home-screen').classList.add('hidden');
+            document.getElementById('vs-menu-screen').classList.add('hidden');
+            document.getElementById('play-screen').classList.remove('hidden'); 
+            document.getElementById('play-screen').classList.add('flex'); 
+            nextQuestion();
         };
 
         function nextQuestion() {
@@ -665,18 +706,20 @@
 
             if (state.difficulty === 'vs') {
                 const totalSeconds = (Date.now() - state.vsStartTime) / 1000 + state.vsPenalty;
-                const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', state.vsKeyword);
-                await setDoc(matchRef, { [user.uid]: { status: 'finished', time: totalSeconds } }, { merge: true });
-                const snap = await getDoc(matchRef);
-                const data = snap.data() || {};
-                const players = Object.keys(data);
-                if (players.length >= 2) {
-                    const opp = players.find(id => id !== user.uid);
-                    const outcomeEl = document.getElementById('vs-outcome');
-                    if (opp && data[opp].status === 'finished') {
-                        if (totalSeconds < data[opp].time) { coinBonus = 2; outcomeEl.innerText = "勝利"; outcomeEl.style.color = "#fbbf24"; }
-                        else { coinBonus = 0; outcomeEl.innerText = "敗北"; outcomeEl.style.color = "#ef4444"; }
-                        outcomeEl.classList.remove('hidden');
+                if (user) {
+                    const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', state.vsKeyword);
+                    await setDoc(matchRef, { [user.uid]: { status: 'finished', time: totalSeconds } }, { merge: true });
+                    const snap = await getDoc(matchRef);
+                    const data = snap.data() || {};
+                    const players = Object.keys(data);
+                    if (players.length >= 2) {
+                        const opp = players.find(id => id !== user.uid);
+                        const outcomeEl = document.getElementById('vs-outcome');
+                        if (opp && data[opp].status === 'finished') {
+                            if (totalSeconds < data[opp].time) { coinBonus = 2; outcomeEl.innerText = "勝利"; outcomeEl.style.color = "#fbbf24"; }
+                            else { coinBonus = 0; outcomeEl.innerText = "敗北"; outcomeEl.style.color = "#ef4444"; }
+                            outcomeEl.classList.remove('hidden');
+                        }
                     }
                 }
                 document.getElementById('total-change-coins').innerText = `${totalSeconds.toFixed(2)}s`;
@@ -731,15 +774,19 @@
         onAuthStateChanged(auth, async (u) => { 
             user = u; 
             if (user) {
-                const snap = await getDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'));
-                if (snap.exists()) userData = snap.data();
+                try {
+                    const snap = await getDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'));
+                    if (snap.exists()) userData = snap.data();
+                } catch(e) { console.warn("Firestore profile read failed:", e); }
                 updateGlobalUI();
             } else {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch(e) { console.warn("Auth signin failed:", e); }
             }
         });
     </script>
