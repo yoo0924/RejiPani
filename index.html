@@ -18,7 +18,11 @@
             box-sizing: border-box;
         }
 
-        .hidden { display: none !important; }
+        /* 確実にタップを透過・非表示にする */
+        .hidden { 
+            display: none !important; 
+            pointer-events: none !important;
+        }
 
         body {
             background-color: #000;
@@ -118,8 +122,8 @@
     <div class="crt-scanlines"></div>
     <div class="crt-flicker"></div>
 
-    <!-- ナイトメア突入演出オーバーレイ -->
-    <div id="nightmare-intro-overlay" class="hidden fixed inset-0 z-[1500] bg-red-900/80 flex flex-col items-center justify-center pointer-events-none text-center">
+    <!-- ナイトメア突入演出（初期状態はflexを外してタッチ遮断を確実に防止） -->
+    <div id="nightmare-intro-overlay" class="hidden fixed inset-0 z-[1500] bg-red-900/80 items-center justify-center pointer-events-none text-center">
         <div class="text-6xl font-black text-white italic mb-4" style="text-shadow: 4px 4px #000;">NIGHTMARE</div>
         <div class="text-2xl font-bold text-white tracking-[1em]">STARTING...</div>
     </div>
@@ -454,9 +458,6 @@
             finished: false
         };
 
-        // ==========================================
-        //  Sound Engine (BGM再生・試聴・安定化)
-        // ==========================================
         const Sound = {
             ctx: null, isMuted: false, bgmTimer: null, previewTimer: null, bgmIndex: 0,
             init() {
@@ -960,9 +961,6 @@
             bar.innerHTML = items;
         }
 
-        // ==========================================
-        //  ゲームコア進行 (所持金ゆとり調整 & ナイトメア対応)
-        // ==========================================
         function startGame(difficulty, isVS = false) {
             state.difficulty = difficulty;
             state.totalChangeCoins = 0;
@@ -1013,7 +1011,6 @@
             setTimeout(() => { state.isTransitioning = false; updateUI(); }, 350);
         }
 
-        // お金が足りないストレスを解消する余裕を持った配分ロジック
         function generateWallet(price, difficulty) {
             let w = {};
             COIN_TYPES.forEach(c => w[c.val] = 0);
@@ -1052,7 +1049,6 @@
                 w[1]     = Math.floor(Math.random() * 6) + 3;
             }
 
-            // 最低支払保証（確実に請求額を超えるように札を追加）
             let cur = Object.keys(w).reduce((acc, k) => acc + (w[k] * Number(k)), 0);
             while (cur < price) {
                 if (price >= 10000) { w[10000]++; cur += 10000; }
@@ -1300,9 +1296,11 @@
                 Sound.glitch();
                 const overlay = document.getElementById('nightmare-intro-overlay');
                 overlay.classList.remove('hidden');
+                overlay.classList.add('flex', 'flex-col');
                 document.body.classList.add('intro-shaking');
                 setTimeout(() => {
                     overlay.classList.add('hidden');
+                    overlay.classList.remove('flex', 'flex-col');
                     document.body.classList.remove('intro-shaking');
                     startGame('nightmare');
                 }, 1800);
