@@ -15,7 +15,6 @@
             box-sizing: border-box;
         }
 
-        /* hidden要素の表示消去（Tailwindの挙動に準拠） */
         .hidden { 
             display: none !important; 
         }
@@ -166,7 +165,7 @@
                 </div>
                 <button type="button" onclick="showVSMenu()" class="pixel-button w-full py-3 text-lg font-bold bg-blue-600 text-white italic uppercase">VS MODE (最大4人)</button>
                 <div class="grid grid-cols-2 gap-2">
-                    <button type="button" onclick="startGame('endless')" class="pixel-button py-2 text-sm font-bold bg-green-600 text-white">Endless</button>
+                    <button type="button" onclick="showEndlessMenu()" class="pixel-button py-2 text-sm font-bold bg-green-600 text-white">Endless</button>
                     <button type="button" onclick="openRankingMenu()" class="pixel-button py-2 text-sm font-bold bg-amber-700 text-white">🏆 ランキング</button>
                 </div>
                 <div class="grid grid-cols-3 gap-2 pt-1">
@@ -174,6 +173,29 @@
                     <button type="button" onclick="toggleCustomize(true)" class="pixel-button py-2 text-xs font-bold bg-gray-700 text-white">カスタム</button>
                     <button type="button" onclick="toggleCollection(true)" class="pixel-button py-2 text-xs font-bold bg-blue-900 text-white">称号図鑑</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Endless 説明・準備画面 -->
+        <div id="endless-menu-screen" class="hidden absolute inset-0 z-[145] flex flex-col bg-black p-6 border-4 border-white justify-between text-center">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-2xl font-black text-green-400">ENDLESS MODE</h2>
+                <button onclick="hideEndlessMenu()" class="text-2xl font-bold px-2">×</button>
+            </div>
+            <div class="my-auto space-y-4">
+                <div class="pixel-border p-4 bg-gray-950 text-left space-y-2">
+                    <p class="text-xs text-yellow-400 font-bold border-b border-gray-700 pb-1 uppercase">ルール説明</p>
+                    <p class="text-xs text-gray-300 leading-relaxed">
+                        次々と現れる会計をスマートにこなし続けろ！<br><br>
+                        ⚠️ <span class="text-red-400 font-bold">終了条件:</span><br>
+                        お釣りの累計枚数が<span class="text-yellow-400 font-bold underline">10枚を超えた時点</span>で即ゲームオーバー！
+                    </p>
+                </div>
+                <p class="text-[11px] text-gray-400 animate-pulse">どれだけ多くのステージを突破できるか限界に挑戦！</p>
+            </div>
+            <div class="space-y-2">
+                <button type="button" onclick="startEndlessWithCountdown()" class="pixel-button w-full py-4 text-xl font-black bg-green-600 text-white">スタート！</button>
+                <button type="button" onclick="hideEndlessMenu()" class="pixel-button w-full py-2.5 text-xs bg-gray-800 text-white">戻る</button>
             </div>
         </div>
 
@@ -444,7 +466,7 @@
             currentStep: 0, totalSteps: 10, price: 0, wallet: {}, initialWallet: {}, inputAmount: 0,
             timeLeft: 15, timer: null, totalChangeCoins: 0, isPaused: false, difficulty: 'normal',
             secretTaps: 0, history: [], itemsRemaining: 3, isEnding: false, secretEndingCount: 0,
-            isTransitioning: false, gameStartTime: 0, elapsedTimer: null
+            isTransitioning: false, gameStartTime: 0, elapsedTimer: null, clearedStages: 0
         };
 
         let vsState = {
@@ -721,6 +743,26 @@
         function selectBGM(id) { Sound.click(); userData.currentBGM = id; saveStorage(); renderCustomize(); }
         function selectBG(id) { Sound.click(); userData.currentBG = id; saveStorage(); renderCustomize(); }
 
+        /* Endless 専用メニュー制御 */
+        function showEndlessMenu() {
+            Sound.click();
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('endless-menu-screen').classList.remove('hidden');
+        }
+
+        function hideEndlessMenu() {
+            Sound.click();
+            document.getElementById('endless-menu-screen').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+        }
+
+        function startEndlessWithCountdown() {
+            Sound.click();
+            Sound.init();
+            document.getElementById('endless-menu-screen').classList.add('hidden');
+            startCountdownAndLaunch('endless');
+        }
+
         let currentRankingTab = 'normal';
         function openRankingMenu() {
             Sound.click();
@@ -763,12 +805,15 @@
                 });
                 const json = await res.json();
                 if (json.ranking && json.ranking.length > 0) {
-                    listEl.innerHTML = json.ranking.map((r, i) => `
+                    listEl.innerHTML = json.ranking.map((r, i) => {
+                        const rawScore = (r.score !== undefined && r.score !== null) ? r.score : (r.stage !== undefined ? r.stage : 0);
+                        const displayScore = mode === 'endless' ? `${rawScore} ステージ` : `${rawScore} 枚`;
+                        return `
                         <div class="flex justify-between items-center pixel-border p-2 bg-gray-900 text-xs">
-                            <span class="font-bold ${i === 0 ? 'text-yellow-400' : 'text-gray-300'}">#${i + 1} ${r.name}</span>
-                            <span class="text-green-400 font-bold">${mode === 'endless' ? `${r.score} ステージ` : `${r.score} 枚`}</span>
-                        </div>
-                    `).join('');
+                            <span class="font-bold ${i === 0 ? 'text-yellow-400' : 'text-gray-300'}">#${i + 1} ${r.name || '名無し'}</span>
+                            <span class="text-green-400 font-bold">${displayScore}</span>
+                        </div>`;
+                    }).join('');
                 } else {
                     listEl.innerHTML = '<div class="text-center text-xs py-8 text-gray-500">まだ記録がありません。</div>';
                 }
@@ -922,8 +967,13 @@
                     clearInterval(timer);
                     overlay.classList.add('hidden');
                     overlay.classList.remove('flex', 'flex-col');
-                    document.getElementById('vs-menu-screen').classList.add('hidden');
-                    launchVSGame(diff);
+                    if (diff === 'endless') {
+                        document.getElementById('endless-menu-screen').classList.add('hidden');
+                        startGame('endless');
+                    } else {
+                        document.getElementById('vs-menu-screen').classList.add('hidden');
+                        launchVSGame(diff);
+                    }
                 }
             }, 900);
         }
@@ -970,6 +1020,7 @@
             state.difficulty = difficulty;
             state.totalChangeCoins = 0;
             state.currentStep = 0;
+            state.clearedStages = 0;
             state.isPaused = false;
             state.itemsRemaining = (difficulty === 'nightmare') ? 1 : (difficulty === 'endless' ? 2 : 3);
             state.totalSteps = difficulty === 'endless' ? Infinity : 10;
@@ -1065,7 +1116,8 @@
 
         function updateUI() {
             document.getElementById('question-count').innerText = `STAGE ${state.currentStep}${state.difficulty === 'endless' ? '' : '/10'}`;
-            document.getElementById('cumulative-change-count').innerText = `${state.totalChangeCoins}枚`;
+            const changeCountText = state.difficulty === 'endless' ? `${state.totalChangeCoins}/10枚` : `${state.totalChangeCoins}枚`;
+            document.getElementById('cumulative-change-count').innerText = changeCountText;
             document.getElementById('difficulty-badge').innerText = state.difficulty.toUpperCase();
             document.getElementById('price-display').innerText = `¥${state.price.toLocaleString()}`;
             document.getElementById('input-display').innerText = `¥${state.inputAmount.toLocaleString()}`;
@@ -1120,7 +1172,6 @@
             const change = state.inputAmount - state.price;
             if (change === 0) {
                 Sound.perfect();
-                if (state.difficulty === 'endless') state.totalChangeCoins = Math.max(0, state.totalChangeCoins - 1);
             } else {
                 let coinCount = 0; let temp = change;
                 [10000, 5000, 2000, 1000, 500, 100, 50, 10, 5, 1].forEach(c => {
@@ -1130,14 +1181,26 @@
                 state.totalChangeCoins += coinCount;
             }
 
+            // Endless 終了判定（お釣り合計が10枚を超えたら終了）
+            const isEndlessGameOver = (state.difficulty === 'endless' && state.totalChangeCoins > 10);
+
+            if (!isEndlessGameOver) {
+                state.clearedStages = state.currentStep;
+            }
+
             document.getElementById('clerk-reaction').innerText = change === 0 ? "PERFECT!" : `お釣り: ¥${change.toLocaleString()}`;
+            
             setTimeout(() => {
                 document.getElementById('clerk-reaction').innerText = "";
-                nextQuestion();
+                if (isEndlessGameOver) {
+                    showResult(true);
+                } else {
+                    nextQuestion();
+                }
             }, 1100);
         }
 
-        async function showResult() {
+        async function showResult(isGameOver = false) {
             Sound.stopBGM();
             clearInterval(state.elapsedTimer);
             if (state.timer) clearInterval(state.timer);
@@ -1147,15 +1210,28 @@
             document.getElementById('play-screen').classList.add('hidden');
             document.getElementById('result-screen').classList.remove('hidden');
 
-            const coinBonus = (state.difficulty === 'nightmare') ? 5 : (state.difficulty === 'hard' ? 3 : 1);
+            const statusEl = document.getElementById('result-status');
+            if (state.difficulty === 'endless') {
+                statusEl.innerText = isGameOver ? "GAME OVER (お釣り10枚超過)" : "ENDLESS COMPLETE";
+            } else {
+                statusEl.innerText = "STAGE COMPLETE";
+            }
+
+            const coinBonus = (state.difficulty === 'nightmare') ? 5 : (state.difficulty === 'hard' ? 3 : (state.difficulty === 'endless' ? Math.max(1, Math.floor(state.clearedStages / 2)) : 1));
             userData.coins += coinBonus;
             document.getElementById('earned-coins').innerText = coinBonus;
 
             let rankId = "pan-man";
-            if (state.totalChangeCoins <= 10) rankId = "nightmare-god";
-            else if (state.totalChangeCoins <= 20) rankId = (state.difficulty === 'hard') ? "hard-god" : "normal-god";
-            else if (state.totalChangeCoins <= 30) rankId = "god";
-            else if (state.totalChangeCoins <= 50) rankId = "wizard";
+            if (state.difficulty === 'endless') {
+                if (state.clearedStages >= 20) rankId = "god";
+                else if (state.clearedStages >= 10) rankId = "wizard";
+                else rankId = "normal";
+            } else {
+                if (state.totalChangeCoins <= 10) rankId = "nightmare-god";
+                else if (state.totalChangeCoins <= 20) rankId = (state.difficulty === 'hard') ? "hard-god" : "normal-god";
+                else if (state.totalChangeCoins <= 30) rankId = "god";
+                else if (state.totalChangeCoins <= 50) rankId = "wizard";
+            }
 
             if (!userData.titles.includes(rankId)) {
                 userData.titles.push(rankId);
@@ -1173,8 +1249,8 @@
 
             if (state.difficulty === 'endless') {
                 document.getElementById('result-stat-label').innerText = "到達ステージ数";
-                document.getElementById('total-change-coins').innerText = `${state.currentStep} ステージ`;
-                submitScoreToGAS('endless', state.currentStep);
+                document.getElementById('total-change-coins').innerText = `${state.clearedStages} ステージ`;
+                submitScoreToGAS('endless', state.clearedStages);
             } else {
                 document.getElementById('result-stat-label').innerText = "累計お釣り枚数";
                 document.getElementById('total-change-coins').innerText = `${state.totalChangeCoins} 枚 (${totalElapsed.toFixed(1)}s)`;
