@@ -1071,46 +1071,105 @@
             let w = {};
             COIN_TYPES.forEach(c => w[c.val] = 0);
 
-            if (difficulty === 'nightmare') {
-                w[10000] = Math.floor(price / 10000) + Math.floor(Math.random() * 3) + 1;
-                w[5000]  = Math.floor(Math.random() * 3) + 1;
-                w[2000]  = Math.random() > 0.4 ? 1 : 0;
-                w[1000]  = Math.floor(Math.random() * 4) + 2;
-                w[500]   = Math.floor(Math.random() * 3) + 1;
-                w[100]   = Math.floor(Math.random() * 6) + 2;
-                w[50]    = Math.floor(Math.random() * 3) + 1;
-                w[10]    = Math.floor(Math.random() * 6) + 2;
-                w[5]     = Math.floor(Math.random() * 3) + 1;
-                w[1]     = Math.floor(Math.random() * 8) + 3;
-            } else if (difficulty === 'hard') {
-                w[10000] = price >= 10000 ? Math.floor(price / 10000) + 1 : 1;
-                w[5000]  = Math.floor(Math.random() * 2) + 1;
-                w[2000]  = Math.random() > 0.7 ? 1 : 0;
-                w[1000]  = Math.floor(Math.random() * 4) + 2;
-                w[500]   = Math.floor(Math.random() * 2) + 1;
-                w[100]   = Math.floor(Math.random() * 5) + 2;
-                w[50]    = Math.floor(Math.random() * 2) + 1;
-                w[10]    = Math.floor(Math.random() * 5) + 2;
-                w[5]     = Math.floor(Math.random() * 2) + 1;
-                w[1]     = Math.floor(Math.random() * 6) + 2;
+            // 1. 各桁の端数を抽出 (1円台, 10円台)
+            const d1 = price % 10;
+            const d10 = Math.floor((price % 100) / 10);
+
+            // 2. 約25%の確率で「狙えばパーフェクト可能」フラグを付与
+            const canPerfect = Math.random() < 0.25;
+
+            // --- 1円玉 & 5円玉の設定 (5円玉を狙わせる絶妙なバランス) ---
+            if (canPerfect) {
+                // パーフェクト可能な構成
+                if (d1 >= 5) {
+                    w[5] = 1;
+                    w[1] = (d1 - 5) + (Math.random() < 0.4 ? 1 : 0);
+                } else {
+                    w[5] = Math.random() < 0.5 ? 1 : 0;
+                    w[1] = d1 + (Math.random() < 0.3 ? 1 : 0);
+                }
             } else {
-                w[10000] = price >= 10000 ? 1 : 0;
-                w[5000]  = price >= 5000 ? 1 : 0;
-                w[1000]  = Math.floor(Math.random() * 3) + (price >= 5000 ? 1 : Math.ceil(price / 1000));
-                w[500]   = Math.floor(Math.random() * 2) + 1;
-                w[100]   = Math.floor(Math.random() * 5) + 3;
-                w[50]    = Math.floor(Math.random() * 2) + 1;
-                w[10]    = Math.floor(Math.random() * 5) + 3;
-                w[5]     = Math.floor(Math.random() * 2) + 1;
-                w[1]     = Math.floor(Math.random() * 6) + 3;
+                // 基本はパーフェクト不可：端数が少しだけ足りない、または端数出しを誘発する枚数
+                // 例: 端数8円のとき 3円持たせて「3円出してお釣り5円玉」を狙わせる
+                if (d1 === 0) {
+                    w[5] = Math.random() < 0.3 ? 1 : 0;
+                    w[1] = Math.floor(Math.random() * 3); // 0〜2枚
+                } else if (d1 < 5) {
+                    // 端数より1枚少なく持たせる（パーフェクト阻止しつつ小銭放出を促す）
+                    w[5] = Math.random() < 0.5 ? 1 : 0;
+                    w[1] = Math.max(0, d1 - 1);
+                } else {
+                    // d1 >= 5 の場合：5円玉をあえて持たせず、端数引く5の1円を持たせて5円釣りを狙わせる
+                    w[5] = 0;
+                    w[1] = (d1 - 5); // 端数3円出して5円玉でお釣りをもらうプレイ
+                }
             }
 
+            // --- 10円玉 & 50円玉の設定 (50円玉お釣りを狙わせる) ---
+            if (canPerfect) {
+                if (d10 >= 5) {
+                    w[50] = 1;
+                    w[10] = (d10 - 5) + (Math.random() < 0.3 ? 1 : 0);
+                } else {
+                    w[50] = Math.random() < 0.5 ? 1 : 0;
+                    w[10] = d10 + (Math.random() < 0.3 ? 1 : 0);
+                }
+            } else {
+                if (d10 === 0) {
+                    w[50] = Math.random() < 0.3 ? 1 : 0;
+                    w[10] = Math.floor(Math.random() * 3);
+                } else if (d10 < 5) {
+                    w[50] = Math.random() < 0.4 ? 1 : 0;
+                    w[10] = Math.max(0, d10 - 1);
+                } else {
+                    w[50] = 0;
+                    w[10] = (d10 - 5); // 20円出して50円玉でお釣りをもらうプレイ
+                }
+            }
+
+            // --- 100円玉 & 500円玉の設定 ---
+            const d100 = Math.floor((price % 1000) / 100);
+            if (d100 >= 5) {
+                w[500] = Math.random() < 0.6 ? 1 : 0;
+                w[100] = Math.floor(Math.random() * 4) + 1;
+            } else {
+                w[500] = Math.random() < 0.5 ? 1 : 0;
+                w[100] = Math.floor(Math.random() * 3) + 1;
+            }
+
+            // --- お札 (1000円、2000円、5000円、10000円) ---
+            if (difficulty === 'nightmare') {
+                w[10000] = Math.floor(price / 10000) + Math.floor(Math.random() * 2) + 1;
+                w[5000]  = Math.floor(Math.random() * 2) + 1;
+                w[2000]  = Math.random() < 0.3 ? 1 : 0;
+                w[1000]  = Math.floor(Math.random() * 3) + 1;
+            } else if (difficulty === 'hard') {
+                w[10000] = price >= 10000 ? Math.floor(price / 10000) + 1 : (Math.random() < 0.3 ? 1 : 0);
+                w[5000]  = Math.random() < 0.6 ? 1 : 0;
+                w[2000]  = Math.random() < 0.2 ? 1 : 0;
+                w[1000]  = Math.floor(Math.random() * 3) + 1;
+            } else {
+                // normal / endless
+                w[10000] = price >= 10000 ? 1 : 0;
+                w[5000]  = price >= 5000 ? 1 : (Math.random() < 0.4 ? 1 : 0);
+                w[1000]  = Math.max(1, Math.ceil((price % 5000) / 1000) + (Math.random() < 0.5 ? 1 : 0));
+            }
+
+            // --- 最低支払可能額の保証（払えない事故を防ぐ） ---
             let cur = Object.keys(w).reduce((acc, k) => acc + (w[k] * Number(k)), 0);
             while (cur < price) {
-                if (price >= 10000) { w[10000]++; cur += 10000; }
-                else if (price >= 5000) { w[5000]++; cur += 5000; }
-                else { w[1000]++; cur += 1000; }
+                if (price >= 10000 && cur + 10000 <= price + 10000) {
+                    w[10000] = (w[10000] || 0) + 1;
+                    cur += 10000;
+                } else if (price >= 5000 && cur + 5000 <= price + 5000) {
+                    w[5000] = (w[5000] || 0) + 1;
+                    cur += 5000;
+                } else {
+                    w[1000] = (w[1000] || 0) + 1;
+                    cur += 1000;
+                }
             }
+
             return w;
         }
 
