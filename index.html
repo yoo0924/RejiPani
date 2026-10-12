@@ -84,6 +84,17 @@
             opacity: 0.5;
         }
 
+        @keyframes intro-shake {
+            0% { transform: translate(0, 0); }
+            10% { transform: translate(-10px, -10px); }
+            20% { transform: translate(10px, 5px); }
+            30% { transform: translate(-5px, 10px); }
+            40% { transform: translate(5px, -5px); }
+            50% { transform: translate(-10px, 5px); }
+            100% { transform: translate(0, 0); }
+        }
+        .intro-shaking { animation: intro-shake 0.1s infinite; }
+
         .coin-10000 { background: #550055; color: #fff; }
         .coin-5000  { background: #6b4226; color: #fff; }
         .coin-2000  { background: #2d5a27; color: #fff; }
@@ -106,6 +117,12 @@
 <body class="bg-default">
     <div class="crt-scanlines"></div>
     <div class="crt-flicker"></div>
+
+    <!-- ナイトメア突入演出オーバーレイ -->
+    <div id="nightmare-intro-overlay" class="hidden fixed inset-0 z-[1500] bg-red-900/80 flex flex-col items-center justify-center pointer-events-none text-center">
+        <div class="text-6xl font-black text-white italic mb-4" style="text-shadow: 4px 4px #000;">NIGHTMARE</div>
+        <div class="text-2xl font-bold text-white tracking-[1em]">STARTING...</div>
+    </div>
 
     <!-- UI ヘッダー -->
     <div class="fixed top-4 right-4 z-[500] flex gap-2">
@@ -137,6 +154,7 @@
 
             <div class="my-auto">
                 <div id="secret-trigger" onclick="tapSecret()" class="text-6xl mb-2 animate-bounce cursor-pointer select-none">💰</div>
+                <div id="nightmare-hint" class="hidden text-[10px] text-red-500 font-bold whitespace-nowrap animate-pulse mb-1">💰x10...？</div>
                 <h1 class="text-3xl sm:text-4xl font-black text-yellow-400 tracking-widest uppercase mb-1">レジレジパニック</h1>
                 <p class="text-[10px] text-gray-400">お釣りを最少にしてスマートに支払え！</p>
             </div>
@@ -177,7 +195,7 @@
             <button onclick="closeRankingMenu()" class="pixel-button mt-4 w-full py-3 bg-white text-black font-bold">閉じる</button>
         </div>
 
-        <!-- VS MODE: メニュー & ロビー画面 -->
+        <!-- VS MODE 画面 -->
         <div id="vs-menu-screen" class="hidden absolute inset-0 z-[140] flex flex-col bg-black p-6 border-4 border-white justify-between">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-2xl font-black text-blue-500 italic">ONLINE VERSUS</h2>
@@ -199,7 +217,6 @@
                 <button onclick="enterVSRoom()" class="pixel-button w-full py-4 text-xl font-bold bg-blue-600 text-white">入室 / 部屋作成</button>
             </div>
 
-            <!-- 待機ロビーエリア -->
             <div id="vs-lobby-area" class="hidden space-y-4 my-auto w-full">
                 <div class="text-center">
                     <div class="text-xs text-gray-400">ROOM KEY: <span id="lobby-key-display" class="text-blue-400 font-bold"></span></div>
@@ -233,26 +250,23 @@
             <button onclick="hideGachaMenu()" class="text-xs text-gray-500 underline">戻る</button>
         </div>
 
-        <!-- カスタマイズ画面 (一新) -->
+        <!-- カスタマイズ画面 -->
         <div id="customize-screen" class="hidden absolute inset-0 z-[155] flex flex-col bg-black p-6 overflow-y-auto border-4 border-white">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-2xl font-black text-yellow-400 uppercase tracking-widest">CUSTOMIZE</h2>
                 <button onclick="toggleCustomize(false)" class="text-2xl font-bold px-2">×</button>
             </div>
             <div class="space-y-4">
-                <!-- タップSE選択 -->
                 <div class="pixel-border p-3 bg-gray-900">
                     <p class="text-xs text-yellow-400 mb-2 font-bold uppercase">タップ・コインSE (全4種)</p>
                     <div id="se-selector" class="space-y-1.5"></div>
                 </div>
 
-                <!-- ゲームBGM選択 (王道クラシカル・シンフォニック調) -->
                 <div class="pixel-border p-3 bg-gray-900">
                     <p class="text-xs text-yellow-400 mb-2 font-bold uppercase">ゲーム中BGM (全4種)</p>
                     <div id="bgm-selector" class="space-y-1.5"></div>
                 </div>
 
-                <!-- 背景選択 -->
                 <div class="pixel-border p-3 bg-gray-900 text-center">
                     <p class="text-xs text-yellow-400 mb-2 font-bold uppercase">背景スタイル</p>
                     <div id="bg-selector" class="flex gap-3 justify-center flex-wrap"></div>
@@ -273,7 +287,6 @@
 
         <!-- プレイ画面 -->
         <div id="play-screen" class="hidden flex-col h-full bg-transparent">
-            <!-- VSモード専用相手プログレスバー -->
             <div id="vs-opponents-bar" class="hidden bg-gray-950 px-3 py-1.5 border-b-2 border-blue-500 text-[10px] space-y-1"></div>
 
             <div class="p-3 bg-black border-b-4 border-white flex-none">
@@ -341,7 +354,6 @@
                 </div>
             </div>
 
-            <!-- VS モードの順位・経過時間一覧表 -->
             <div id="vs-result-board" class="hidden w-full pixel-border p-3 bg-gray-950 mb-4 text-left text-xs">
                 <p class="font-bold text-yellow-400 mb-2 border-b border-gray-700 pb-1">VS RESULT TIMES</p>
                 <div id="vs-result-rows" class="space-y-1.5"></div>
@@ -362,10 +374,7 @@
     </div>
 
     <script>
-        // ==========================================
-        //  Google Apps Script (GAS) API URL 設定
-        // ==========================================
-        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwT2Oh7Uc51rjO2qqx_U8sQvewzoYS4vx4Qmzv4syaCBEqWPoeol2FsjsA8Gd30EMt8ZA/exec"; // ここにデプロイしたWebアプリURLを貼り付けます
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwT2Oh7Uc51rjO2qqx_U8sQvewzoYS4vx4Qmzv4syaCBEqWPoeol2FsjsA8Gd30EMt8ZA/exec"[cite: 4];
 
         const COIN_TYPES = [
             { val: 10000, label: "10,000", class: "coin-10000" }, { val: 5000, label: "5,000", class: "coin-5000" },
@@ -388,7 +397,6 @@
             { id: "pan-man", name: "財布パンパンマン", rarity: "common", condition: "累計お釣り 91枚以上" }
         ];
 
-        // 新しいガチャ対象リスト (SE 3種 + BGM 3種を追加排出)
         const GACHA_ITEMS = [
             { type: 'se', id: 'heavy', name: '重厚コイン (SE)' },
             { type: 'se', id: 'magic', name: 'クリスタルベル (SE)' },
@@ -398,7 +406,6 @@
             { type: 'bgm', id: 'town', name: '旅人の宿場町 (BGM)' }
         ];
 
-        // 永続化プレイヤーデータ構造
         let userData = {
             name: "名無しレジ客",
             coins: 20,
@@ -411,7 +418,6 @@
             currentBG: 'default'
         };
 
-        // ローカルストレージ復元
         function loadStorage() {
             try {
                 const saved = localStorage.getItem("rejipani_save_v2");
@@ -430,7 +436,6 @@
             updateGlobalUI();
         }
 
-        // ゲーム進行ステート
         let state = {
             currentStep: 0, totalSteps: 10, price: 0, wallet: {}, initialWallet: {}, inputAmount: 0,
             timeLeft: 15, timer: null, totalChangeCoins: 0, isPaused: false, difficulty: 'normal',
@@ -438,7 +443,6 @@
             isTransitioning: false, gameStartTime: 0, elapsedTimer: null
         };
 
-        // VSモード管理ステート
         let vsState = {
             playerId: "p_" + Math.random().toString(36).substring(2, 9),
             roomKey: "",
@@ -451,7 +455,7 @@
         };
 
         // ==========================================
-        //  Sound Engine (SE 4種 & すぎやま風BGM 4種)
+        //  Sound Engine (BGM再生・試聴・安定化)
         // ==========================================
         const Sound = {
             ctx: null, isMuted: false, bgmTimer: null, previewTimer: null, bgmIndex: 0,
@@ -483,21 +487,17 @@
                     osc.stop(now + duration);
                 } catch(e) {}
             },
-            // SE (4種類)
             coin() {
                 this.init();
                 const now = this.ctx ? this.ctx.currentTime : 0;
                 if (userData.currentSE === 'heavy') {
-                    // 重厚な金属低音打撃
                     this.play(220, 'triangle', 0.12, 0.2);
                     this.play(110, 'sine', 0.18, 0.25);
                 } else if (userData.currentSE === 'magic') {
-                    // クリスタルベル風・分散和音
-                    this.play(1046.50, 'sine', 0.15, 0.08); // C6
-                    this.play(1318.51, 'sine', 0.18, 0.08, 0.03); // E6
-                    this.play(1567.98, 'sine', 0.22, 0.08, 0.06); // G6
+                    this.play(1046.50, 'sine', 0.15, 0.08);
+                    this.play(1318.51, 'sine', 0.18, 0.08, 0.03);
+                    this.play(1567.98, 'sine', 0.22, 0.08, 0.06);
                 } else if (userData.currentSE === 'laser') {
-                    // サイバーパルス
                     if (!this.ctx || this.isMuted) return;
                     const osc = this.ctx.createOscillator();
                     const gain = this.ctx.createGain();
@@ -509,61 +509,62 @@
                     osc.connect(gain); gain.connect(this.ctx.destination);
                     osc.start(now); osc.stop(now + 0.08);
                 } else {
-                    // retro (クラシック短音)
                     this.play(880, 'square', 0.08, 0.08);
                 }
             },
-            click() { this.play(440, 'sine', 0.04, 0.05); },
+            click() { this.init(); this.play(440, 'sine', 0.04, 0.05); },
             perfect() {
+                this.init();
                 this.play(523.25, 'triangle', 0.12, 0.1);
                 setTimeout(() => this.play(659.25, 'triangle', 0.12, 0.1), 90);
                 setTimeout(() => this.play(783.99, 'triangle', 0.15, 0.1), 180);
                 setTimeout(() => this.play(1046.50, 'triangle', 0.35, 0.12), 270);
             },
-            // すぎやまこういち先生調 クラシカル＆シンフォニック進行
-            // 勇壮なトライアド、厳かな宮廷ワルツ、短調の迷宮ディミニッシュ、温かな宿屋の教会旋法
+            glitch() {
+                this.init();
+                for(let i=0; i<15; i++) {
+                    setTimeout(() => this.play(Math.random()*200 + 40, 'sawtooth', 0.1, 0.2), i*50);
+                }
+            },
             getBGMSequence(id) {
                 const seqs = {
-                    // 1. 勇者の行進 (王道・堂々としたI - IV - V - I進行)
                     adventure: [
-                        [261.63, 329.63, 392.00, 523.25], // C
-                        [293.66, 349.23, 440.00, 587.33], // Dm
-                        [349.23, 440.00, 523.25, 698.46], // F
-                        [392.00, 493.88, 587.33, 783.99], // G
-                        [261.63, 392.00, 523.25, 659.25]  // C
+                        [261.63, 329.63, 392.00, 523.25],
+                        [293.66, 349.23, 440.00, 587.33],
+                        [349.23, 440.00, 523.25, 698.46],
+                        [392.00, 493.88, 587.33, 783.99],
+                        [261.63, 392.00, 523.25, 659.25]
                     ],
-                    // 2. 王宮の舞踏曲 (3拍子風の優雅なクラシカル進行)
                     castle: [
-                        [220.00, 277.18, 329.63, 440.00], // A
-                        [293.66, 369.99, 440.00, 587.33], // D
-                        [246.94, 311.13, 369.99, 493.88], // B
-                        [329.63, 415.30, 493.88, 659.25]  // E
+                        [220.00, 277.18, 329.63, 440.00],
+                        [293.66, 369.99, 440.00, 587.33],
+                        [246.94, 311.13, 369.99, 493.88],
+                        [329.63, 415.30, 493.88, 659.25]
                     ],
-                    // 3. 未踏の地下迷宮 (不穏なディミニッシュ・半音階下降)
                     dungeon: [
-                        [146.83, 220.00, 261.63, 311.13], // Dm-dim
-                        [138.59, 207.65, 246.94, 293.66], // C#dim
-                        [130.81, 196.00, 233.08, 277.18], // Cdim
-                        [123.47, 185.00, 220.00, 261.63]  // Bdim
+                        [146.83, 220.00, 261.63, 311.13],
+                        [138.59, 207.65, 246.94, 293.66],
+                        [130.81, 196.00, 233.08, 277.18],
+                        [123.47, 185.00, 220.00, 261.63]
                     ],
-                    // 4. 旅人の宿場町 (暖かなメジャー7th・平穏な休息)
                     town: [
-                        [261.63, 329.63, 392.00, 493.88], // Cmaj7
-                        [220.00, 261.63, 329.63, 392.00], // Am7
-                        [174.61, 220.00, 261.63, 329.63], // Fmaj7
-                        [196.00, 246.94, 293.66, 349.23]  // G7
+                        [261.63, 329.63, 392.00, 493.88],
+                        [220.00, 261.63, 329.63, 392.00],
+                        [174.61, 220.00, 261.63, 329.63],
+                        [196.00, 246.94, 293.66, 349.23]
                     ]
                 };
                 return seqs[id] || seqs.adventure;
             },
             startBGM() {
+                this.init();
                 if (this.isMuted || this.bgmTimer) return;
                 const seq = this.getBGMSequence(userData.currentBGM);
-                const tempo = 0.28;
+                const tempo = 0.32;
                 this.bgmTimer = setInterval(() => {
                     const chord = seq[this.bgmIndex % seq.length];
                     const panicMultiplier = (!state.isEnding && state.timeLeft < 5) ? 1.15 : 1.0;
-                    this.play(chord[0] * panicMultiplier, 'triangle', tempo * 2.2, 0.08);
+                    this.play(chord[0] * panicMultiplier, 'triangle', tempo * 2.0, 0.08);
                     this.play(chord[1] * panicMultiplier, 'sine', tempo * 1.5, 0.05);
                     this.play(chord[2] * panicMultiplier, 'sine', tempo, 0.04, 0.04);
                     this.play(chord[3] * panicMultiplier, 'sine', tempo, 0.03, 0.08);
@@ -574,7 +575,9 @@
                 if (this.bgmTimer) { clearInterval(this.bgmTimer); this.bgmTimer = null; }
             },
             playSample(type, id) {
-                this.init(); this.stopSample(); this.stopBGM();
+                this.init();
+                this.stopSample();
+                this.stopBGM();
                 if (type === 'se') {
                     const temp = userData.currentSE;
                     userData.currentSE = id;
@@ -583,14 +586,18 @@
                 } else {
                     const seq = this.getBGMSequence(id);
                     let pIdx = 0;
-                    this.previewTimer = setInterval(() => {
+                    const tempo = 0.3;
+                    const playStep = () => {
                         const chord = seq[pIdx % seq.length];
-                        this.play(chord[0], 'triangle', 0.5, 0.08);
-                        this.play(chord[1], 'sine', 0.4, 0.05);
-                        this.play(chord[2], 'sine', 0.3, 0.04, 0.04);
+                        this.play(chord[0], 'triangle', tempo * 1.8, 0.09);
+                        this.play(chord[1], 'sine', tempo * 1.3, 0.05);
+                        this.play(chord[2], 'sine', tempo, 0.04, 0.03);
+                        this.play(chord[3], 'sine', tempo, 0.03, 0.06);
                         pIdx++;
-                    }, 300);
-                    setTimeout(() => this.stopSample(), 3200);
+                    };
+                    playStep();
+                    this.previewTimer = setInterval(playStep, tempo * 1000);
+                    setTimeout(() => this.stopSample(), 3600);
                 }
             },
             stopSample() {
@@ -598,13 +605,14 @@
             }
         };
 
-        // ==========================================
-        //  UI 更新 & プレイヤー名システム
-        // ==========================================
         function updateGlobalUI() {
             document.getElementById('coin-display-ui').innerText = userData.coins;
             document.getElementById('player-name-ui').innerText = userData.name;
             document.body.className = `bg-${userData.currentBG}`;
+            const hint = document.getElementById('nightmare-hint');
+            if (hint && userData.titles.includes("collector-king")) {
+                hint.classList.remove('hidden');
+            }
         }
 
         function openNamePrompt() {
@@ -617,9 +625,6 @@
             }
         }
 
-        // ==========================================
-        //  ガチャ & カスタム画面ロジック (一新)
-        // ==========================================
         function showGachaMenu() { Sound.init(); document.getElementById('start-screen').classList.add('hidden'); document.getElementById('gacha-screen').classList.remove('hidden'); }
         function hideGachaMenu() { document.getElementById('start-screen').classList.remove('hidden'); document.getElementById('gacha-screen').classList.add('hidden'); }
         
@@ -666,7 +671,6 @@
         }
 
         function renderCustomize() {
-            // SE
             const seList = [
                 { id: 'retro', name: 'ピコピコ短音 (初期)' },
                 { id: 'heavy', name: '重厚打撃コイン' },
@@ -685,7 +689,6 @@
                     </div>`;
             }).join('');
 
-            // BGM
             const bgmList = [
                 { id: 'adventure', name: '勇者の行進 (初期)' },
                 { id: 'castle', name: '王宮の舞踏曲' },
@@ -704,7 +707,6 @@
                     </div>`;
             }).join('');
 
-            // 背景
             const bgC = document.getElementById('bg-selector');
             bgC.innerHTML = userData.unlockedBG.map(id => `
                 <button onclick="selectBG('${id}')" class="w-10 h-10 pixel-border bg-${id} ${userData.currentBG === id ? 'ring-2 ring-yellow-400' : ''}"></button>
@@ -715,9 +717,6 @@
         function selectBGM(id) { Sound.click(); userData.currentBGM = id; saveStorage(); renderCustomize(); }
         function selectBG(id) { Sound.click(); userData.currentBG = id; saveStorage(); renderCustomize(); }
 
-        // ==========================================
-        //  オンラインランキング (GAS / スプレッドシート)
-        // ==========================================
         let currentRankingTab = 'normal';
         function openRankingMenu() {
             Sound.click();
@@ -789,9 +788,6 @@
             } catch(e) {}
         }
 
-        // ==========================================
-        //  VS MODE (最大4人ロビー・同期システム)
-        // ==========================================
         function showVSMenu() {
             Sound.init();
             document.getElementById('start-screen').classList.add('hidden');
@@ -822,14 +818,12 @@
             document.getElementById('lobby-key-display').innerText = key;
             document.getElementById('lobby-diff-display').innerText = vsState.difficulty.toUpperCase();
 
-            // 定期ポーリング開始
             pollVSRoom();
             vsState.pollInterval = setInterval(pollVSRoom, 1500);
         }
 
         async function pollVSRoom() {
             if (!GAS_API_URL) {
-                // オフライン擬似ロビー
                 vsState.isHost = true;
                 renderLobbyUI({
                     hostId: vsState.playerId,
@@ -858,7 +852,6 @@
                     vsState.isHost = (data.roomState.hostId === vsState.playerId);
                     renderLobbyUI(data.roomState);
 
-                    // スタートカウントダウン同期
                     if (data.roomState.status === 'starting' && !state.gameStartTime) {
                         clearInterval(vsState.pollInterval);
                         startCountdownAndLaunch(data.roomState.difficulty);
@@ -931,7 +924,6 @@
 
         function launchVSGame(diff) {
             startGame(diff, true);
-            // プレイ中の進捗同期間隔
             vsState.pollInterval = setInterval(syncVSProgress, 1200);
         }
 
@@ -969,14 +961,14 @@
         }
 
         // ==========================================
-        //  ゲームコア進行
+        //  ゲームコア進行 (所持金ゆとり調整 & ナイトメア対応)
         // ==========================================
         function startGame(difficulty, isVS = false) {
             state.difficulty = difficulty;
             state.totalChangeCoins = 0;
             state.currentStep = 0;
             state.isPaused = false;
-            state.itemsRemaining = 3;
+            state.itemsRemaining = (difficulty === 'nightmare') ? 1 : (difficulty === 'endless' ? 2 : 3);
             state.totalSteps = difficulty === 'endless' ? Infinity : 10;
             state.gameStartTime = Date.now();
 
@@ -987,7 +979,6 @@
 
             if (!isVS) document.getElementById('vs-opponents-bar').classList.add('hidden');
 
-            // 経過時間タイマー
             if (state.elapsedTimer) clearInterval(state.elapsedTimer);
             state.elapsedTimer = setInterval(() => {
                 const sec = ((Date.now() - state.gameStartTime) / 1000).toFixed(1);
@@ -1007,35 +998,67 @@
             state.isTransitioning = true;
             state.history = [];
 
-            // 請求額決定
-            if (state.difficulty === 'hard') {
-                state.price = Math.floor(Math.random() * 24000) + 3000;
+            if (state.difficulty === 'nightmare') {
+                state.price = Math.floor(Math.random() * 80000) + 12000;
+            } else if (state.difficulty === 'hard') {
+                state.price = Math.floor(Math.random() * 18000) + 2500;
             } else {
-                state.price = Math.floor(Math.random() * 8500) + 400;
+                state.price = Math.floor(Math.random() * 6800) + 380;
             }
 
-            state.wallet = generateWallet(state.price);
+            state.wallet = generateWallet(state.price, state.difficulty);
             state.initialWallet = { ...state.wallet };
             updateUI();
             startTimer();
             setTimeout(() => { state.isTransitioning = false; updateUI(); }, 350);
         }
 
-        function generateWallet(price) {
+        // お金が足りないストレスを解消する余裕を持った配分ロジック
+        function generateWallet(price, difficulty) {
             let w = {};
             COIN_TYPES.forEach(c => w[c.val] = 0);
-            w[10000] = price >= 10000 ? 1 : 0;
-            w[5000] = price >= 5000 && Math.random() > 0.4 ? 1 : 0;
-            w[1000] = Math.floor(Math.random() * 4) + 1;
-            w[500] = Math.floor(Math.random() * 2);
-            w[100] = Math.floor(Math.random() * 5) + 1;
-            w[50] = Math.floor(Math.random() * 2);
-            w[10] = Math.floor(Math.random() * 5) + 1;
-            w[5] = Math.floor(Math.random() * 2);
-            w[1] = Math.floor(Math.random() * 5) + 1;
 
+            if (difficulty === 'nightmare') {
+                w[10000] = Math.floor(price / 10000) + Math.floor(Math.random() * 3) + 1;
+                w[5000]  = Math.floor(Math.random() * 3) + 1;
+                w[2000]  = Math.random() > 0.4 ? 1 : 0;
+                w[1000]  = Math.floor(Math.random() * 4) + 2;
+                w[500]   = Math.floor(Math.random() * 3) + 1;
+                w[100]   = Math.floor(Math.random() * 6) + 2;
+                w[50]    = Math.floor(Math.random() * 3) + 1;
+                w[10]    = Math.floor(Math.random() * 6) + 2;
+                w[5]     = Math.floor(Math.random() * 3) + 1;
+                w[1]     = Math.floor(Math.random() * 8) + 3;
+            } else if (difficulty === 'hard') {
+                w[10000] = price >= 10000 ? Math.floor(price / 10000) + 1 : 1;
+                w[5000]  = Math.floor(Math.random() * 2) + 1;
+                w[2000]  = Math.random() > 0.7 ? 1 : 0;
+                w[1000]  = Math.floor(Math.random() * 4) + 2;
+                w[500]   = Math.floor(Math.random() * 2) + 1;
+                w[100]   = Math.floor(Math.random() * 5) + 2;
+                w[50]    = Math.floor(Math.random() * 2) + 1;
+                w[10]    = Math.floor(Math.random() * 5) + 2;
+                w[5]     = Math.floor(Math.random() * 2) + 1;
+                w[1]     = Math.floor(Math.random() * 6) + 2;
+            } else {
+                w[10000] = price >= 10000 ? 1 : 0;
+                w[5000]  = price >= 5000 ? 1 : 0;
+                w[1000]  = Math.floor(Math.random() * 3) + (price >= 5000 ? 1 : Math.ceil(price / 1000));
+                w[500]   = Math.floor(Math.random() * 2) + 1;
+                w[100]   = Math.floor(Math.random() * 5) + 3;
+                w[50]    = Math.floor(Math.random() * 2) + 1;
+                w[10]    = Math.floor(Math.random() * 5) + 3;
+                w[5]     = Math.floor(Math.random() * 2) + 1;
+                w[1]     = Math.floor(Math.random() * 6) + 3;
+            }
+
+            // 最低支払保証（確実に請求額を超えるように札を追加）
             let cur = Object.keys(w).reduce((acc, k) => acc + (w[k] * Number(k)), 0);
-            while (cur < price) { w[1000]++; cur += 1000; }
+            while (cur < price) {
+                if (price >= 10000) { w[10000]++; cur += 10000; }
+                else if (price >= 5000) { w[5000]++; cur += 5000; }
+                else { w[1000]++; cur += 1000; }
+            }
             return w;
         }
 
@@ -1123,9 +1146,28 @@
             document.getElementById('play-screen').classList.add('hidden');
             document.getElementById('result-screen').classList.remove('hidden');
 
-            const coinBonus = state.difficulty === 'hard' ? 3 : 1;
+            const coinBonus = (state.difficulty === 'nightmare') ? 5 : (state.difficulty === 'hard' ? 3 : 1);
             userData.coins += coinBonus;
             document.getElementById('earned-coins').innerText = coinBonus;
+
+            let rankId = "pan-man";
+            if (state.totalChangeCoins <= 10) rankId = "nightmare-god";
+            else if (state.totalChangeCoins <= 20) rankId = (state.difficulty === 'hard') ? "hard-god" : "normal-god";
+            else if (state.totalChangeCoins <= 30) rankId = "god";
+            else if (state.totalChangeCoins <= 50) rankId = "wizard";
+
+            if (!userData.titles.includes(rankId)) {
+                userData.titles.push(rankId);
+            }
+            if (state.difficulty === 'nightmare' && !userData.titles.includes("nightmare-conqueror")) {
+                userData.titles.push("nightmare-conqueror");
+            }
+            if (userData.titles.length >= 9 && !userData.titles.includes("collector-king")) {
+                userData.titles.push("collector-king");
+            }
+
+            const titleObj = ALL_TITLES.find(t => t.id === rankId);
+            document.getElementById('final-rank-text').innerText = titleObj ? titleObj.name : "庶民";
             saveStorage();
 
             if (state.difficulty === 'endless') {
@@ -1138,7 +1180,6 @@
                 submitScoreToGAS(state.difficulty, state.totalChangeCoins);
             }
 
-            // VS モード終了時の結果送信・同期集計
             if (vsState.roomKey) {
                 if (vsState.pollInterval) clearInterval(vsState.pollInterval);
                 await handleVSFinished(totalElapsed);
@@ -1191,7 +1232,6 @@
             } catch(e) {}
         }
 
-        // ポーズ & 共通関数
         function togglePause() {
             if (state.currentStep === 0) return;
             state.isPaused = !state.isPaused;
@@ -1223,7 +1263,7 @@
             state.itemsRemaining--;
             Sound.click();
             document.getElementById('refresh-item-btn').innerText = `REFRESH(${state.itemsRemaining})`;
-            state.wallet = generateWallet(state.price);
+            state.wallet = generateWallet(state.price, state.difficulty);
             state.initialWallet = { ...state.wallet };
             state.inputAmount = 0;
             state.history = [];
@@ -1251,13 +1291,21 @@
             document.getElementById('msg-box').classList.remove('hidden');
         }
 
+        // ナイトメア演出（赤画面＆振動＆グリッチ音）
         function tapSecret() {
             state.secretTaps++;
             Sound.init();
             if (state.secretTaps >= 10) {
                 state.secretTaps = 0;
-                showMsg("悪夢の気配を感じる... (NIGHTMARE)");
-                startGame('hard');
+                Sound.glitch();
+                const overlay = document.getElementById('nightmare-intro-overlay');
+                overlay.classList.remove('hidden');
+                document.body.classList.add('intro-shaking');
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                    document.body.classList.remove('intro-shaking');
+                    startGame('nightmare');
+                }, 1800);
             }
         }
 
@@ -1269,7 +1317,6 @@
             }
         }
 
-        // 起動初期化
         loadStorage();
     </script>
 </body>
